@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-main: #060607;
+    --bg-card: #0d0d10;
+    --bg-card-hover: #131318;
+    --border-color: #1c1c22;
+    --accent-red: #e11d48;
+    --accent-red-bright: #ff2a4b;
+    --accent-red-dark: #881337;
+    --text-primary: #ffffff;
+    --text-secondary: #9ea0a8;
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Typography Utilities */
+.font-condensed {
+  font-family: var(--font-oswald), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.font-script {
+  font-family: var(--font-caveat), cursive;
+}
+
+/* Backsplash Huge Portfolio Text - Solid Rich Red */
+.bg-portfolio-text {
+  font-family: var(--font-oswald), sans-serif;
+  font-weight: 900;
+  line-height: 0.8;
+  letter-spacing: -0.03em;
+  color: #c8102e;
+}
+
+/* Card Glow & Glassmorphism */
+.dark-card {
+  background: #0b0b0e;
+  border: 1px solid #1a1a22;
+  border-radius: 4px;
+}
+
+.red-quote-card {
+  background: linear-gradient(145deg, #2b0408 0%, #120204 60%, #0a0102 100%);
+  border: 1px solid rgba(225, 29, 72, 0.25);
+  box-shadow: 0 10px 30px rgba(225, 29, 72, 0.1);
+}
+
+/* Circular Rotating Badge */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
+
+/* Skill Badge Styling */
+.skill-pill {
+  background: #111116;
+  border: 1px solid #22222c;
+  color: #c4c5cf;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+
+.skill-pill:hover {
+  border-color: var(--accent-red);
+  color: #ffffff;
+  background: #1a1a24;
+  transform: translateY(-1px);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #060607;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f1f28;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-red);
+}
