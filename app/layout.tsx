@@ -21,9 +21,9 @@ const caveat = Caveat({
 });
 
 export const metadata: Metadata = {
-  title: "Yash Bajpai — Web Designer & UI/UX Creator",
+  title: "Yash Bajpai — GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING ",
   description:
-    "Official portfolio website of Yash Bajpai, Web Designer & UI/UX Creator crafting stylish, user-focused web experiences with strategy and precision.",
+    "Official portfolio website of Yash Bajpai, GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING  crafting stylish, user-focused web experiences with strategy and precision.",
   keywords: [
     "Yash Bajpai",
     "Web Designer",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Yash Bajpai" }],
   openGraph: {
-    title: "Yash Bajpai — Web Designer & UI/UX Creator",
+    title: "Yash Bajpai — GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING ",
     description: "Turning ideas into powerful digital experiences.",
     images: ["/images/hero_portrait.png"]
   }

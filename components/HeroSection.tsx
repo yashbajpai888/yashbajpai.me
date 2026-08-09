@@ -42,7 +42,7 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
 
           {/* Subtitle */}
           <h2 className="text-rose-500 font-bold text-sm sm:text-base tracking-widest uppercase mt-2 mb-4">
-            WEB DESIGNER & UI/UX CREATOR
+            GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING
           </h2>
 
           {/* Description Paragraph */}
