@@ -1,10 +1,37 @@
-"use client";
-
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Search, Lightbulb, Edit3, Code, Send, Quote, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
-const SKILLS = [
+interface EducationItem {
+  id?: string;
+  title: string;
+  institution: string;
+  years: string;
+}
+
+interface ProcessStep {
+  id?: string;
+  num: string;
+  title: string;
+  desc: string;
+}
+
+const DEFAULT_EDUCATION: EducationItem[] = [
+  {
+    title: "B.Sc. in Visual Communication Design",
+    institution: "Binus University",
+    years: "2018 - 2022"
+  },
+  {
+    title: "UI/UX Design Certification",
+    institution: "Google Career Certificates",
+    years: "2023"
+  }
+];
+
+const DEFAULT_SKILLS = [
   "WEB DESIGN",
   "UI/UX DESIGN",
   "FIGMA",
@@ -18,40 +45,54 @@ const SKILLS = [
   "SEO BASICS"
 ];
 
-const PROCESS_STEPS = [
-  {
-    num: "01",
-    icon: Search,
-    title: "DISCOVER",
-    desc: "Understanding goals, audience, and project requirements."
-  },
-  {
-    num: "02",
-    icon: Lightbulb,
-    title: "IDEATE",
-    desc: "Planning, wireframing, and creating the right concept."
-  },
-  {
-    num: "03",
-    icon: Edit3,
-    title: "DESIGN",
-    desc: "Crafting visual design with a focus on user experience."
-  },
-  {
-    num: "04",
-    icon: Code,
-    title: "DEVELOP",
-    desc: "Building fast, responsive, and high-performing websites."
-  },
-  {
-    num: "05",
-    icon: Send,
-    title: "DELIVER",
-    desc: "Testing, optimizing, and launching with perfection."
-  }
+const DEFAULT_PROCESS: ProcessStep[] = [
+  { num: "01", title: "DISCOVER", desc: "Understanding goals, audience, and project requirements." },
+  { num: "02", title: "IDEATE", desc: "Planning, wireframing, and creating the right concept." },
+  { num: "03", title: "DESIGN", desc: "Crafting visual design with a focus on user experience." },
+  { num: "04", title: "DEVELOP", desc: "Building fast, responsive, and high-performing websites." },
+  { num: "05", title: "DELIVER", desc: "Testing, optimizing, and launching with perfection." }
 ];
 
+const STEP_ICONS = [Search, Lightbulb, Edit3, Code, Send];
+
 export default function EducationSkillsProcessSection() {
+  const [educationList, setEducationList] = useState<EducationItem[]>(DEFAULT_EDUCATION);
+  const [skillsList, setSkillsList] = useState<string[]>(DEFAULT_SKILLS);
+  const [processSteps, setProcessSteps] = useState<ProcessStep[]>(DEFAULT_PROCESS);
+  const [quote, setQuote] = useState("Good design is not just how it looks, but how it works.");
+  const [signature, setSignature] = useState("Yash");
+  const [tagline, setTagline] = useState("LET'S CREATE SOMETHING GREAT TOGETHER.");
+
+  useEffect(() => {
+    const fetchSectionData = async () => {
+      try {
+        const docRef = doc(db, "settings", "homepage");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          
+          if (Array.isArray(data.education) && data.education.length > 0) {
+            setEducationList(data.education);
+          }
+          if (Array.isArray(data.skills) && data.skills.length > 0) {
+            setSkillsList(data.skills);
+          }
+          if (Array.isArray(data.process) && data.process.length > 0) {
+            setProcessSteps(data.process);
+          }
+          if (data.about) {
+            setQuote(data.about.quote || "Good design is not just how it looks, but how it works.");
+            setSignature(data.about.signature || "Yash");
+            setTagline(data.about.tagline || "LET'S CREATE SOMETHING GREAT TOGETHER.");
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load Education, Skills & Process data from Firestore, using static defaults:", err);
+      }
+    };
+    fetchSectionData();
+  }, []);
+
   return (
     <section className="w-full py-16 px-6 md:px-12 border-b border-[#18181f] bg-[#060607]">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-start">
@@ -75,29 +116,19 @@ export default function EducationSkillsProcessSection() {
             </h3>
 
             <div className="space-y-5">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wide">
-                    B.Sc. in Visual Communication Design
-                  </h4>
-                  <p className="text-[11px] text-neutral-400 font-medium">Binus University</p>
+              {educationList.map((edu, idx) => (
+                <div key={idx} className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wide">
+                      {edu.title}
+                    </h4>
+                    <p className="text-[11px] text-neutral-400 font-medium">{edu.institution}</p>
+                  </div>
+                  <span className="text-xs font-semibold text-rose-500 font-mono">
+                    {edu.years}
+                  </span>
                 </div>
-                <span className="text-xs font-semibold text-rose-500 font-mono">
-                  2018 - 2022
-                </span>
-              </div>
-
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wide">
-                    UI/UX Design Certification
-                  </h4>
-                  <p className="text-[11px] text-neutral-400 font-medium">Google Career Certificates</p>
-                </div>
-                <span className="text-xs font-semibold text-rose-500 font-mono">
-                  2023
-                </span>
-              </div>
+              ))}
             </div>
           </div>
 
@@ -108,7 +139,7 @@ export default function EducationSkillsProcessSection() {
             </h3>
 
             <div className="flex flex-wrap gap-2">
-              {SKILLS.map((skill) => (
+              {skillsList.map((skill) => (
                 <span key={skill} className="skill-pill">
                   {skill}
                 </span>
@@ -133,10 +164,10 @@ export default function EducationSkillsProcessSection() {
             {/* Timeline Line */}
             <div className="absolute left-[21px] top-6 bottom-6 w-[1px] bg-[#1d1d28] -z-0" />
 
-            {PROCESS_STEPS.map((step) => {
-              const StepIcon = step.icon;
+            {processSteps.map((step, idx) => {
+              const StepIcon = STEP_ICONS[idx % STEP_ICONS.length] || Search;
               return (
-                <div key={step.num} className="relative z-10 flex items-start gap-4 group">
+                <div key={idx} className="relative z-10 flex items-start gap-4 group">
                   {/* Step Number Badge */}
                   <span className="font-condensed text-xs font-extrabold text-rose-500 pt-1 w-4 text-right">
                     {step.num}
@@ -180,19 +211,19 @@ export default function EducationSkillsProcessSection() {
               <Quote className="w-10 h-10 text-rose-600 fill-rose-600/30 mb-6 opacity-90" />
 
               <p className="text-white text-base sm:text-lg font-medium leading-relaxed italic tracking-wide">
-                &ldquo;Good design is not just how it looks, but how it works.&rdquo;
+                &ldquo;{quote}&rdquo;
               </p>
             </div>
 
             {/* Signature & Bottom Callout */}
             <div className="mt-8 pt-6 border-t border-rose-900/40">
               <div className="font-script text-4xl text-neutral-200 tracking-wide mb-6">
-                Yash
+                {signature}
               </div>
 
               <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-300 flex items-center gap-1.5">
-                <span>LET&apos;S CREATE SOMETHING GREAT TOGETHER.</span>
-                <Sparkles className="w-3 h-3 text-rose-500 fill-rose-500" />
+                <span>{tagline}</span>
+                <Sparkles className="w-3 h-3 text-rose-500 fill-rose-500 shrink-0" />
               </div>
             </div>
           </div>

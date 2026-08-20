@@ -1,9 +1,9 @@
-"use client";
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { ArrowRight, ExternalLink, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 interface Project {
   id: string;
@@ -16,41 +16,36 @@ interface Project {
   link: string;
 }
 
-const PROJECTS: Project[] = [
-  {
-    id: "veloce",
-    num: "01",
-    title: "VELOCE BIKES",
-    category: "E-COMMERCE WEBSITE",
-    image: "/images/project_veloce.png",
-    description: "An ultra-sleek e-commerce platform designed for high-performance aerodynamic road bicycles with custom 3D configurator and instant checkout integration.",
-    tags: ["Next.js", "Tailwind CSS", "Shopify API", "Three.js"],
-    link: "#"
-  },
-  {
-    id: "woodcraft",
-    num: "02",
-    title: "WOODCRAFT",
-    category: "FURNITURE WEBSITE",
-    image: "/images/project_woodcraft.png",
-    description: "A warm, minimalist digital showroom for hand-crafted artisan wooden furniture emphasizing texture, craftsmanship, and bespoke ordering.",
-    tags: ["UI/UX Design", "Framer", "Webflow", "CSS Grid"],
-    link: "#"
-  },
-  {
-    id: "urbanic",
-    num: "03",
-    title: "URBANIC",
-    category: "FASHION MAGAZINE",
-    image: "/images/project_urbanic.png",
-    description: "High-impact editorial fashion webzine with dynamic parallax scrolling, interactive lookbooks, and high-fashion video integration.",
-    tags: ["React", "GSAP Animation", "Headless CMS", "Tailwind"],
-    link: "#"
-  }
-];
-
 export default function SelectedProjectsSection() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projectsList, setProjectsList] = useState<Project[]>([]);
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const q = query(collection(db, "projects"), orderBy("num", "asc"));
+        const snap = await getDocs(q);
+        const fetched: Project[] = [];
+        snap.forEach((doc) => {
+          const d = doc.data();
+          fetched.push({
+            id: doc.id,
+            num: d.num || "01",
+            title: d.title || "",
+            category: d.category || "",
+            image: d.image || "",
+            description: d.description || "",
+            tags: d.tags || [],
+            link: d.link || ""
+          });
+        });
+        setProjectsList(fetched);
+      } catch (err) {
+        console.warn("Failed to load projects from Firestore:", err);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   return (
     <section className="w-full py-16 px-6 md:px-12 border-b border-[#18181f] bg-[#060607]">
@@ -69,7 +64,7 @@ export default function SelectedProjectsSection() {
 
         {/* 3 Projects Horizontal Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {PROJECTS.map((project, index) => (
+          {projectsList.map((project, index) => (
             <motion.div
               key={project.id}
               initial={{ opacity: 0, y: 20 }}
@@ -98,10 +93,10 @@ export default function SelectedProjectsSection() {
                     {project.num}
                   </span>
                   <div>
-                    <h3 className="font-condensed text-base font-bold uppercase tracking-wider text-white group-hover:text-rose-400 transition-colors">
+                    <h3 className="font-condensed text-base font-bold tracking-wider text-white group-hover:text-rose-400 transition-colors">
                       {project.title}
                     </h3>
-                    <p className="text-[10px] uppercase tracking-widest text-neutral-400 font-medium">
+                    <p className="text-[10px] tracking-widest text-neutral-400 font-medium">
                       {project.category}
                     </p>
                   </div>
@@ -149,12 +144,12 @@ export default function SelectedProjectsSection() {
                   <span className="font-condensed text-3xl font-black text-rose-500">
                     {selectedProject.num}
                   </span>
-                  <span className="text-xs uppercase tracking-widest text-neutral-400 font-semibold px-2.5 py-1 bg-[#1a1a24] rounded-full border border-[#2a2a38]">
+                  <span className="text-xs tracking-widest text-neutral-400 font-semibold px-2.5 py-1 bg-[#1a1a24] rounded-full border border-[#2a2a38]">
                     {selectedProject.category}
                   </span>
                 </div>
 
-                <h2 className="font-condensed text-3xl sm:text-4xl font-extrabold uppercase text-white mb-4">
+                <h2 className="font-condensed text-3xl sm:text-4xl font-extrabold text-white mb-4">
                   {selectedProject.title}
                 </h2>
 
@@ -182,10 +177,8 @@ export default function SelectedProjectsSection() {
                   </button>
                   <a
                     href={selectedProject.link}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      alert(`Demo preview for ${selectedProject.title}`);
-                    }}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="flex items-center gap-2 px-5 py-2 text-xs uppercase font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-md shadow-lg shadow-rose-950/50 transition-all"
                   >
                     <span>Live Preview</span>

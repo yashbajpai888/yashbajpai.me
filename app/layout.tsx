@@ -47,8 +47,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${oswald.variable} ${caveat.variable} dark`}>
-      <body className="bg-[#060607] text-white antialiased selection:bg-rose-600 selection:text-white min-h-screen">
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${oswald.variable} ${caveat.variable} dark`}>
+      <body suppressHydrationWarning className="bg-[#060607] text-white antialiased selection:bg-rose-600 selection:text-white min-h-screen">
         {children}
       </body>
     </html>

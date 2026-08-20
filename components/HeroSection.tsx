@@ -1,15 +1,52 @@
-"use client";
-
-import React from "react";
-import Image from "next/image";
+import React, { useEffect, useState } from "react";
 import { Globe, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 interface HeroSectionProps {
   onOpenContact: () => void;
 }
 
 export default function HeroSection({ onOpenContact }: HeroSectionProps) {
+  const [greeting, setGreeting] = useState("Hello, I'm");
+  const [name, setName] = useState("YASH BAJPAI");
+  const [subtitle, setSubtitle] = useState("GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING");
+  const [description, setDescription] = useState("I design and build stylish, user-focused web experiences that combine creativity with strategy. Passionate about clean design, smooth interactions, and details that make a difference.");
+  const [availability, setAvailability] = useState("AVAILABLE WORLDWIDE");
+  const [portraitImage, setPortraitImage] = useState("/images/yash_portrait.png");
+  const [badgeText, setBadgeText] = useState("Turning ideas into powerful digital experiences. ✦");
+  const [exp, setExp] = useState("3+");
+  const [proj, setProj] = useState("40+");
+  const [clients, setClients] = useState("20+");
+
+  useEffect(() => {
+    const fetchHeroData = async () => {
+      try {
+        const docRef = doc(db, "settings", "homepage");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.hero) {
+            setGreeting(data.hero.greeting || "Hello, I'm");
+            setName(data.hero.name || "YASH BAJPAI");
+            setSubtitle(data.hero.subtitle || "GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING");
+            setDescription(data.hero.description || "");
+            setAvailability(data.hero.availability || "AVAILABLE WORLDWIDE");
+            setPortraitImage(data.hero.portraitImage || "/images/yash_portrait.png");
+            setBadgeText(data.hero.rotatingBadgeText || "Turning ideas into powerful digital experiences. ✦");
+            setExp(data.hero.yearsExperience || "3+");
+            setProj(data.hero.projectsCompleted || "40+");
+            setClients(data.hero.happyClients || "20+");
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to load dynamic hero copy, using static fallbacks:", error);
+      }
+    };
+    fetchHeroData();
+  }, []);
+
   return (
     <section className="relative w-full overflow-hidden pt-6 pb-16 px-6 md:px-12 border-b border-[#18181f]">
       {/* Background Huge Condensed PORTFOLIO Backdrop Text - Solid Red */}
@@ -30,33 +67,36 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
           transition={{ duration: 0.8 }}
           className="lg:col-span-5 flex flex-col justify-end pt-12 lg:pt-24 z-20"
         >
-          {/* Cursive Hello Accent */}
+          {/* Cursive Greeting Accent */}
           <span className="font-script text-3xl sm:text-4xl text-neutral-300 ml-1 mb-[-10px] tracking-wide">
-            Hello, I&apos;m
+            {greeting}
           </span>
 
           {/* Main Name Heading */}
           <h1 className="font-condensed text-6xl sm:text-7xl xl:text-8xl font-extrabold text-white tracking-tight leading-[0.9] uppercase my-2">
-            YASH<br />BAJPAI
+            {name.split(" ").map((word, i) => (
+              <React.Fragment key={i}>
+                {word}
+                {i < name.split(" ").length - 1 && <br />}
+              </React.Fragment>
+            ))}
           </h1>
 
           {/* Subtitle */}
           <h2 className="text-rose-500 font-bold text-sm sm:text-base tracking-widest uppercase mt-2 mb-4">
-            GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING
+            {subtitle}
           </h2>
 
           {/* Description Paragraph */}
           <p className="text-neutral-400 text-xs sm:text-sm leading-relaxed max-w-md font-light mb-6">
-            I design and build stylish, user-focused web experiences that combine creativity
-            with strategy. Passionate about clean design, smooth interactions, and details
-            that make a difference.
+            {description}
           </p>
 
           {/* Availability Badge */}
           <div className="flex items-center space-x-3">
             <span className="inline-flex items-center space-x-2 text-xs uppercase tracking-wider text-neutral-300 bg-[#0e0e12] border border-[#22222d] px-3.5 py-2 rounded-full hover:border-rose-500/50 transition-colors">
               <Globe className="w-3.5 h-3.5 text-rose-500" />
-              <span>AVAILABLE WORLDWIDE</span>
+              <span>{availability}</span>
             </span>
 
             <button
@@ -68,19 +108,19 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
           </div>
         </motion.div>
 
-        {/* Center-Right Column: Hero Portrait & Rotating Badge - Positioned over TF letters */}
+        {/* Center-Right Column: Hero Portrait & Rotating Badge */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, delay: 0.2 }}
           className="lg:col-span-5 relative flex justify-center items-end z-20"
         >
-          {/* Portrait Container - Raw <img> for 100% uncompressed PNG quality, positioned over T and F */}
+          {/* Portrait Container */}
           <div className="relative w-full max-w-[460px] flex justify-center items-end group">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/images/yash_portrait.png"
-              alt="Yash Bajpai — Web Designer"
+              src={portraitImage}
+              alt={`${name} — Portfolio`}
               className="w-full h-auto max-h-[560px] object-contain object-bottom drop-shadow-2xl transition-transform duration-700 group-hover:scale-105"
             />
           </div>
@@ -98,7 +138,7 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
                   />
                   <text className="text-[8.5px] font-semibold tracking-[0.18em] uppercase fill-neutral-300">
                     <textPath href="#textPath" startOffset="0%">
-                      Turning ideas into powerful digital experiences. ✦
+                      {badgeText}
                     </textPath>
                   </text>
                 </svg>
@@ -121,7 +161,7 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
         >
           <div className="group">
             <div className="font-condensed text-4xl sm:text-5xl font-extrabold text-rose-500 group-hover:translate-x-1 transition-transform">
-              3+
+              {exp}
             </div>
             <div className="text-[10px] sm:text-xs text-neutral-400 font-semibold uppercase tracking-wider mt-1">
               YEARS<br />EXPERIENCE
@@ -132,7 +172,7 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
 
           <div className="group">
             <div className="font-condensed text-4xl sm:text-5xl font-extrabold text-rose-500 group-hover:translate-x-1 transition-transform">
-              40+
+              {proj}
             </div>
             <div className="text-[10px] sm:text-xs text-neutral-400 font-semibold uppercase tracking-wider mt-1">
               PROJECTS<br />COMPLETED
@@ -143,7 +183,7 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
 
           <div className="group">
             <div className="font-condensed text-4xl sm:text-5xl font-extrabold text-rose-500 group-hover:translate-x-1 transition-transform">
-              20+
+              {clients}
             </div>
             <div className="text-[10px] sm:text-xs text-neutral-400 font-semibold uppercase tracking-wider mt-1">
               HAPPY<br />CLIENTS

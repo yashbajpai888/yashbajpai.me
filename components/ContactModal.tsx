@@ -12,11 +12,13 @@ interface ContactModalProps {
 export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [company, setCompany] = useState("");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name || !email || !message) return;
 
@@ -24,23 +26,48 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
     setErrorMessage("");
 
     try {
-      const res = await fetch("/api/contact", {
+      // 1. Submit directly to Web3Forms API using browser FormData
+      const accessKey = process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || "b913a243-f1b0-4ba6-baad-c617848cd74a";
+      const formData = new FormData(e.currentTarget);
+      
+      if (!formData.has("access_key")) {
+        formData.append("access_key", accessKey);
+      }
+      if (!formData.has("subject")) {
+        formData.append("subject", `New Portfolio Inquiry from ${name}`);
+      }
+      if (!formData.has("from_name")) {
+        formData.append("from_name", "Yash Bajpai Portfolio");
+      }
+
+      const response = await fetch("https://api.web3forms.com/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, message })
+        body: formData
       });
 
-      const data = await res.json();
+      const data = await response.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || "Submission failed");
+      if (!data.success) {
+        throw new Error(data.message || "Failed to submit inquiry to Web3Forms.");
       }
+
+      // 2. Also log to Firebase DB via /api/contact in background (for Admin Dashboard)
+      fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, message, phone, company })
+      }).catch((err) => {
+        console.warn("Firebase backup log error:", err);
+      });
 
       setStatus("success");
       setName("");
       setEmail("");
+      setPhone("");
+      setCompany("");
       setMessage("");
     } catch (err: any) {
+      console.error("Web3Forms submission error:", err);
       setStatus("error");
       setErrorMessage(err.message || "Failed to send message. Please try again.");
     }
@@ -100,6 +127,8 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
               </motion.div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
+                <input type="hidden" name="access_key" value="b913a243-f1b0-4ba6-baad-c617848cd74a" />
+
                 {status === "error" && (
                   <div className="bg-rose-950/50 border border-rose-600/50 p-3 rounded text-rose-300 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
@@ -113,6 +142,7 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
                   </label>
                   <input
                     type="text"
+                    name="name"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -127,6 +157,7 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
                   </label>
                   <input
                     type="email"
+                    name="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -135,11 +166,42 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
                   />
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 mb-1.5">
+                      PHONE NUMBER (OPTIONAL)
+                    </label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="e.g. +91 98765 43210"
+                      className="w-full bg-[#14141c] border border-[#242432] rounded-md px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-rose-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 mb-1.5">
+                      COMPANY NAME (OPTIONAL)
+                    </label>
+                    <input
+                      type="text"
+                      name="company"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      placeholder="e.g. Acme Corp"
+                      className="w-full bg-[#14141c] border border-[#242432] rounded-md px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-rose-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 mb-1.5">
                     PROJECT DETAILS / MESSAGE
                   </label>
                   <textarea
+                    name="message"
                     required
                     rows={4}
                     value={message}
@@ -148,6 +210,7 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
                     className="w-full bg-[#14141c] border border-[#242432] rounded-md px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-rose-500 transition-colors resize-none"
                   />
                 </div>
+
 
                 <div className="pt-2">
                   <button
