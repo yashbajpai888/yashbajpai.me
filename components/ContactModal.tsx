@@ -7,16 +7,24 @@ import { motion, AnimatePresence } from "framer-motion";
 interface ContactModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialService?: string;
 }
 
-export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
+export default function ContactModal({ isOpen, onClose, initialService }: ContactModalProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
+  const [service, setService] = useState(initialService || "Website Design & Development");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+
+  React.useEffect(() => {
+    if (initialService) {
+      setService(initialService);
+    }
+  }, [initialService]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -34,10 +42,13 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
         formData.append("access_key", accessKey);
       }
       if (!formData.has("subject")) {
-        formData.append("subject", `New Portfolio Inquiry from ${name}`);
+        formData.append("subject", `New Inquiry: ${service} from ${name}`);
       }
       if (!formData.has("from_name")) {
         formData.append("from_name", "Yash Bajpai Portfolio");
+      }
+      if (!formData.has("service")) {
+        formData.append("service", service);
       }
 
       const response = await fetch("https://api.web3forms.com/submit", {
@@ -55,7 +66,7 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
       fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, message, phone, company })
+        body: JSON.stringify({ name, email, message, phone, company, service })
       }).catch((err) => {
         console.warn("Firebase backup log error:", err);
       });
@@ -72,6 +83,7 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
       setErrorMessage(err.message || "Failed to send message. Please try again.");
     }
   };
+
 
   return (
     <AnimatePresence>
@@ -198,6 +210,24 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
 
                 <div>
                   <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 mb-1.5">
+                    SERVICE REQUIRED
+                  </label>
+                  <select
+                    name="service"
+                    value={service}
+                    onChange={(e) => setService(e.target.value)}
+                    className="w-full bg-[#14141c] border border-[#242432] rounded-md px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-rose-500 transition-colors"
+                  >
+                    <option value="Logo & Brand Design">Logo &amp; Brand Design</option>
+                    <option value="AI Video Ads">AI Video Ads</option>
+                    <option value="Product Demo Videos">Product Demo Videos</option>
+                    <option value="Website Design & Development">Website Design &amp; Development</option>
+                    <option value="Full Branding & Development Package">Full Branding &amp; Development Package</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 mb-1.5">
                     PROJECT DETAILS / MESSAGE
                   </label>
                   <textarea
@@ -210,6 +240,7 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
                     className="w-full bg-[#14141c] border border-[#242432] rounded-md px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-rose-500 transition-colors resize-none"
                   />
                 </div>
+
 
 
                 <div className="pt-2">
