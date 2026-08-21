@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { ArrowRight, ExternalLink, X, Sparkles, Play, Monitor, Film, Palette, CheckCircle2, MessageSquare, Video as VideoIcon } from "lucide-react";
+import { ArrowRight, ExternalLink, X, Sparkles, Play, Monitor, Film, Palette, MessageSquare, Video as VideoIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -183,7 +183,11 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
                         src={project.image}
                         alt={project.title}
                         fill
-                        className="object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
+                        unoptimized
+                        loading="lazy"
+                        decoding="async"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
+                        className="object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#141420] via-[#0d0d14] to-[#08080c] p-6 text-center">
@@ -198,7 +202,7 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
                     )}
 
                     {/* Media Type Overlay Badge */}
-                    <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 bg-black/70 border border-white/10 backdrop-blur-md px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider text-white">
+                    <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 bg-black/80 border border-white/10 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider text-white">
                       <CatIcon className="w-3 h-3 text-rose-500" />
                       <span>{project.category}</span>
                     </div>
@@ -254,7 +258,7 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
       {/* Rich Interactive Project Preview Modal */}
       <AnimatePresence>
         {selectedProject && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

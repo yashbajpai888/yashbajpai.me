@@ -13,14 +13,13 @@ import {
   Timestamp 
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { uploadMediaFile } from "@/lib/upload";
 import { 
   FolderGit, 
   Plus, 
   Edit2, 
   Trash2, 
   X, 
-  ExternalLink, 
-  Eye, 
   Loader2, 
   AlertCircle,
   Sparkles,
@@ -29,7 +28,6 @@ import {
   Film,
   Layout
 } from "lucide-react";
-import Image from "next/image";
 
 interface Project {
   id: string;
@@ -69,58 +67,28 @@ export default function AdminProjectsPage() {
   const [formLink, setFormLink] = useState("");
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadingImage(true);
+    setUploadProgress(0);
 
-    // 1. Try Cloudinary if configured
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-    if (
-      cloudName && 
-      uploadPreset && 
-      cloudName !== "your_cloudinary_cloud_name" && 
-      uploadPreset !== "your_cloudinary_upload_preset"
-    ) {
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", uploadPreset);
-
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setFormImage(data.secure_url);
-          setUploadingImage(false);
-          return;
-        }
-      } catch (err) {
-        console.warn("Cloudinary upload failed, using local Data URL fallback:", err);
-      }
+    try {
+      const mediaUrl = await uploadMediaFile(file, {
+        folder: "projects",
+        onProgress: (pct) => setUploadProgress(Math.round(pct)),
+      });
+      setFormImage(mediaUrl);
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      alert(`Upload failed: ${err.message || err}`);
+    } finally {
+      setUploadingImage(false);
+      setUploadProgress(null);
     }
-
-    // 2. Local Fallback: Convert image file to Data URL
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setFormImage(event.target.result as string);
-      }
-      setUploadingImage(false);
-    };
-    reader.onerror = (err) => {
-      console.error("FileReader error:", err);
-      alert("Failed to read image file.");
-      setUploadingImage(false);
-    };
-    reader.readAsDataURL(file);
   };
 
   const fetchProjects = async () => {
@@ -189,6 +157,13 @@ export default function AdminProjectsPage() {
 
 
     setFormSubmitting(true);
+
+    if (formImage && formImage.length > 950000) {
+      alert("Selected media string is too large (>1MB base64) to store in database document. Please click the Upload button to upload your image/video to Cloud Storage first.");
+      setFormSubmitting(false);
+      return;
+    }
+
     const parsedTags = formTags
       .split(",")
       .map(tag => tag.trim())
@@ -624,15 +599,18 @@ export default function AdminProjectsPage() {
                     className="flex-1 bg-[#14141c] border border-[#242432] rounded px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500 transition-colors"
                   />
 
-                  <label className="cursor-pointer bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase px-3.5 py-2 rounded flex items-center justify-center transition-colors select-none min-w-[90px]">
+                  <label className="cursor-pointer bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase px-3.5 py-2 rounded flex items-center justify-center gap-1.5 transition-colors select-none min-w-[110px]">
                     {uploadingImage ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>{uploadProgress !== null && uploadProgress > 0 ? `${uploadProgress}%` : "Uploading..."}</span>
+                      </>
                     ) : (
-                      "Upload"
+                      "Upload File"
                     )}
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,video/*,.mp4,.webm,.mov,.gif,.png,.jpg,.jpeg,.webp"
                       onChange={handleImageUpload}
                       disabled={uploadingImage}
                       className="hidden"

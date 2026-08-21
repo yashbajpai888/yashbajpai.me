@@ -67,6 +67,12 @@
 
 .animate-spin-slow {
   animation: spin-slow 20s linear infinite;
+  will-change: transform;
+}
+
+/* GPU Performance Acceleration */
+img, video {
+  content-visibility: auto;
 }
 
 /* Skill Badge Styling */

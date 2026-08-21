@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { uploadMediaFile } from "@/lib/upload";
 import { 
   Settings as SettingsIcon, 
   Sparkles, 
@@ -10,14 +11,12 @@ import {
   Database, 
   Loader2, 
   Layout, 
-  FileText, 
   Mail,
   GraduationCap,
   ListOrdered,
   Plus,
   Trash2,
-  Upload,
-  Image as ImageIcon
+  Upload
 } from "lucide-react";
 
 interface EducationItem {
@@ -193,36 +192,14 @@ export default function AdminSettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-    if (!cloudName || !uploadPreset || cloudName === "your_cloudinary_cloud_name" || uploadPreset === "your_cloudinary_upload_preset") {
-      alert("Cloudinary is not fully configured in your .env.local file. Please check NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET.");
-      return;
-    }
-
     setLoadingState(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("upload_preset", uploadPreset);
-
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error?.message || "Cloudinary upload failed");
-      }
-
-      const data = await res.json();
-      setter(data.secure_url);
-      alert("Image uploaded successfully via Cloudinary!");
+      const mediaUrl = await uploadMediaFile(file, { folder: "settings" });
+      setter(mediaUrl);
+      alert("File uploaded successfully!");
     } catch (err: any) {
-      console.error("Cloudinary upload failed:", err);
-      alert(`Cloudinary Upload failed: ${err.message || err}`);
+      console.error("Upload failed:", err);
+      alert(`Upload failed: ${err.message || err}`);
     } finally {
       setLoadingState(false);
     }

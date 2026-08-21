@@ -21,6 +21,7 @@ const caveat = Caveat({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://yashbajpai.me"),
   title: "Yash Bajpai — GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING ",
   description:
     "Official portfolio website of Yash Bajpai, GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING  crafting stylish, user-focused web experiences with strategy and precision.",

@@ -127,9 +127,9 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
 
           {/* Floating Circular Badge */}
           <div className="absolute top-[45%] -right-4 sm:-right-8 -translate-y-1/2 z-30">
-            <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-[#0d0d12]/90 border border-rose-600/30 backdrop-blur-md flex items-center justify-center p-2 shadow-2xl">
+            <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-[#0d0d12]/95 border border-rose-600/30 flex items-center justify-center p-2 shadow-2xl">
               {/* Rotating Circular Text Ring */}
-              <div className="absolute inset-0 animate-spin-slow">
+              <div className="absolute inset-0 animate-spin-slow will-change-transform">
                 <svg className="w-full h-full" viewBox="0 0 100 100">
                   <path
                     id="textPath"

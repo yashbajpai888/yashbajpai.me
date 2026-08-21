@@ -16,13 +16,10 @@ import {
   Mail, 
   Phone, 
   Briefcase, 
-  Calendar, 
   Search, 
-  Check, 
   Trash2, 
   MessageSquare,
   MessageCircle,
-  ExternalLink,
   ChevronRight,
   Loader2,
   FileText,
@@ -114,9 +111,9 @@ export default function AdminContactsPage() {
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     fetchSubmissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSelectSub = (sub: Submission) => {
