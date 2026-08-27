@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Globe, Sparkles } from "lucide-react";
+import { FileText, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { getResumeConfig, ResumeConfig } from "@/lib/resume";
 
 interface HeroSectionProps {
   onOpenContact: () => void;
@@ -13,12 +14,18 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
   const [name, setName] = useState("YASH BAJPAI");
   const [subtitle, setSubtitle] = useState("GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING");
   const [description, setDescription] = useState("I design and build stylish, user-focused web experiences that combine creativity with strategy. Passionate about clean design, smooth interactions, and details that make a difference.");
-  const [availability, setAvailability] = useState("AVAILABLE WORLDWIDE");
   const [portraitImage, setPortraitImage] = useState("/images/yash_portrait.png");
   const [badgeText, setBadgeText] = useState("Turning ideas into powerful digital experiences. ✦");
   const [exp, setExp] = useState("3+");
   const [proj, setProj] = useState("40+");
   const [clients, setClients] = useState("20+");
+  const [resumeConfig, setResumeConfig] = useState<ResumeConfig | null>({
+    url: "/Yash_S_Bajpai_Resume.pdf",
+    name: "Yash_S_Bajpai_Resume.pdf",
+    label: "MY RESUME",
+    storagePath: "public/Yash_S_Bajpai_Resume.pdf",
+    updatedAt: new Date()
+  });
 
   useEffect(() => {
     const fetchHeroData = async () => {
@@ -32,7 +39,6 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
             setName(data.hero.name || "YASH BAJPAI");
             setSubtitle(data.hero.subtitle || "GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING");
             setDescription(data.hero.description || "");
-            setAvailability(data.hero.availability || "AVAILABLE WORLDWIDE");
             setPortraitImage(data.hero.portraitImage || "/images/yash_portrait.png");
             setBadgeText(data.hero.rotatingBadgeText || "Turning ideas into powerful digital experiences. ✦");
             setExp(data.hero.yearsExperience || "3+");
@@ -45,6 +51,15 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
       }
     };
     fetchHeroData();
+
+    // Fetch dynamic resume configuration
+    const fetchResume = async () => {
+      const config = await getResumeConfig();
+      if (config && config.url) {
+        setResumeConfig(config);
+      }
+    };
+    fetchResume();
   }, []);
 
   return (
@@ -92,12 +107,19 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
             {description}
           </p>
 
-          {/* Availability Badge */}
+          {/* CTA Row: My Resume & Get In Touch */}
           <div className="flex items-center space-x-3">
-            <span className="inline-flex items-center space-x-2 text-xs uppercase tracking-wider text-neutral-300 bg-[#0e0e12] border border-[#22222d] px-3.5 py-2 rounded-full hover:border-rose-500/50 transition-colors">
-              <Globe className="w-3.5 h-3.5 text-rose-500" />
-              <span>{availability}</span>
-            </span>
+            {resumeConfig?.url && (
+              <a
+                href={resumeConfig.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-2 text-xs uppercase font-bold tracking-wider text-white bg-rose-600 hover:bg-rose-700 border border-rose-500/50 px-4 py-2 rounded-full transition-all shadow-lg shadow-rose-950/40 active:scale-95"
+              >
+                <FileText className="w-3.5 h-3.5 text-white" />
+                <span>{resumeConfig.label || "MY RESUME"}</span>
+              </a>
+            )}
 
             <button
               onClick={onOpenContact}
@@ -121,6 +143,9 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
             <img
               src={portraitImage}
               alt={`${name} — Portfolio`}
+              // @ts-ignore
+              fetchPriority="high"
+              decoding="async"
               className="w-full h-auto max-h-[560px] object-contain object-bottom drop-shadow-2xl transition-transform duration-700 group-hover:scale-105"
             />
           </div>

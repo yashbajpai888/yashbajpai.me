@@ -18,6 +18,10 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
+// Configure Storage retry timeouts to prevent infinite 10-minute retry loops
+storage.maxUploadRetryTime = 60000; // 60 seconds max retry time
+storage.maxOperationRetryTime = 30000; // 30 seconds max operation retry time
+
 export interface ContactMessage {
   id?: string;
   name: string;
@@ -54,4 +58,3 @@ export async function sendContactMessage(data: { name: string; email: string; me
 }
 
 export { app, db, auth, storage };
-

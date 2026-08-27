@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Check if request is from an authenticated admin user
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // Public read access for portfolio visitors; Admin authenticated write/delete permissions
+    match /resumes/{allPaths=**} {
+      allow read: if true;
+      allow write, delete: if isAdmin();
+    }
+
+    match /projects/{allPaths=**} {
+      allow read: if true;
+      allow write, delete: if isAdmin();
+    }
+
+    match /uploads/{allPaths=**} {
+      allow read: if true;
+      allow write, delete: if isAdmin();
+    }
+
+    match /settings/{allPaths=**} {
+      allow read: if true;
+      allow write, delete: if isAdmin();
+    }
+  }
+}

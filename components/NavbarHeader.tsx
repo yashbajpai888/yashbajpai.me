@@ -7,7 +7,7 @@ export default function NavbarHeader() {
   return (
     <header className="w-full border-b border-[#18181f] py-4 px-6 md:px-12 flex items-center justify-between text-xs tracking-widest uppercase font-semibold text-[#8e8e98] bg-[#060607]/90 backdrop-blur-md sticky top-0 z-50">
       <div className="flex items-center space-x-2">
-        <span className="text-rose-500 font-bold">WEB DESIGNER</span>
+        <span className="text-rose-500 font-bold">AI VIDEO MAKER</span>
         <span className="text-neutral-600">|</span>
         <span className="text-neutral-300">DIGITAL CREATOR</span>
       </div>

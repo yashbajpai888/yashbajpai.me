@@ -16,8 +16,10 @@ import {
   ListOrdered,
   Plus,
   Trash2,
-  Upload
+  Upload,
+  FileText
 } from "lucide-react";
+import ResumeManagementSection from "@/components/admin/ResumeManagementSection";
 
 interface EducationItem {
   id: string;
@@ -76,7 +78,7 @@ export default function AdminSettingsPage() {
   
   // Tab control
   const [activeTab, setActiveTab] = useState<
-    "cms-hero" | "cms-education-skills" | "cms-process-quote" | "cms-contact" | "env"
+    "cms-hero" | "cms-resume" | "cms-education-skills" | "cms-process-quote" | "cms-contact" | "env"
   >("cms-hero");
 
   // CMS State - Hero & Stats
@@ -177,6 +179,13 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     fetchCMSData();
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "resume" || tabParam === "cms-resume") {
+        setActiveTab("cms-resume");
+      }
+    }
     setEnvStatus({
       FIREBASE_API_KEY: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY && process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== "mock-api-key",
       FIREBASE_PROJECT_ID: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID && process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== "rayhan-portfolio",
@@ -298,6 +307,7 @@ export default function AdminSettingsPage() {
 
   const tabs = [
     { id: "cms-hero", label: "Hero & Media", icon: Layout },
+    { id: "cms-resume", label: "Resume Settings", icon: FileText },
     { id: "cms-education-skills", label: "Education & Skills", icon: GraduationCap },
     { id: "cms-process-quote", label: "Process & Quote", icon: ListOrdered },
     { id: "cms-contact", label: "Footer & Contact", icon: Mail },
@@ -352,6 +362,11 @@ export default function AdminSettingsPage() {
           <div className="flex-1 w-full bg-[#0b0b0e] border border-[#1a1a24] rounded-lg p-6 sm:p-8 shadow-2xl relative">
             <form onSubmit={handleSaveCMS} className="space-y-6">
               
+              {/* Tab Resume Management */}
+              {activeTab === "cms-resume" && (
+                <ResumeManagementSection />
+              )}
+
               {/* Tab 1: Hero & Media */}
               {activeTab === "cms-hero" && (
                 <div className="space-y-5">
@@ -924,7 +939,7 @@ export default function AdminSettingsPage() {
               )}
 
               {/* Submit Buttons */}
-              {activeTab !== "env" && (
+              {activeTab !== "env" && activeTab !== "cms-resume" && (
                 <div className="pt-4 border-t border-[#14141c] flex justify-end">
                   <button
                     type="submit"

@@ -4,7 +4,10 @@ service cloud.firestore {
     
     // Check if client is an authenticated administrator
     function isAdmin() {
-      return request.auth != null;
+      return request.auth != null && (
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+      );
     }
 
     // Public visitors can ONLY create contact submissions
@@ -21,6 +24,10 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+    match /settings/resume {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     // Role document read-only for authentication checks
