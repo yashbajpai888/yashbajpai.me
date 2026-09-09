@@ -12,6 +12,16 @@ export default function Preloader() {
   const startTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
+    // Disable browser automatic scroll restoration so reload always opens at the top
+    if (typeof window !== "undefined") {
+      if ("scrollRestoration" in history) {
+        history.scrollRestoration = "manual";
+      }
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+
     // Lock body scrolling immediately on initial page load
     document.body.classList.add("is-loading");
     startTimeRef.current = Date.now();
@@ -23,6 +33,7 @@ export default function Preloader() {
 
     const handleLoad = () => {
       isWindowLoadedRef.current = true;
+      window.scrollTo(0, 0);
     };
 
     window.addEventListener("load", handleLoad);
@@ -102,6 +113,11 @@ export default function Preloader() {
     if (progress >= 100) {
       // Short 250ms pause at 100%
       const gateTimer = setTimeout(() => {
+        // Guarantee website starts at the very top upon reveal
+        window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+
         setIsGateOpen(true);
 
         // Unlock body scroll as gates open
