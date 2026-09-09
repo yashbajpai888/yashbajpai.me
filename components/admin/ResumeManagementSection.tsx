@@ -117,8 +117,10 @@ export default function ResumeManagementSection() {
     }
   };
 
-  const handleSaveLabel = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveLabel = async (e?: React.FormEvent | React.MouseEvent | React.KeyboardEvent) => {
+    if (e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
     if (!resumeConfig) return;
 
     const trimmedLabel = labelInput.trim() || "My Resume";
@@ -274,8 +276,8 @@ export default function ResumeManagementSection() {
             </div>
           </div>
 
-          {/* Button Label Form */}
-          <form onSubmit={handleSaveLabel} className="space-y-3">
+          {/* Button Label Section */}
+          <div className="space-y-3">
             <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 flex items-center gap-1.5">
               <Tag className="w-3.5 h-3.5 text-rose-500" />
               <span>CTA Button Display Label</span>
@@ -285,11 +287,18 @@ export default function ResumeManagementSection() {
                 type="text"
                 value={labelInput}
                 onChange={(e) => setLabelInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSaveLabel(e);
+                  }
+                }}
                 placeholder="My Resume"
                 className="flex-1 bg-[#14141c] border border-[#242432] rounded px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500 transition-colors font-semibold"
               />
               <button
-                type="submit"
+                type="button"
+                onClick={(e) => handleSaveLabel(e)}
                 disabled={savingLabel || labelInput.trim() === resumeConfig.label}
                 className="bg-rose-600 hover:bg-rose-700 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-bold text-xs uppercase px-4 py-2 rounded transition-colors flex items-center gap-1.5"
               >
@@ -299,7 +308,7 @@ export default function ResumeManagementSection() {
             <p className="text-[10px] text-neutral-500">
               This text will be displayed on the Hero button (e.g. &quot;My Resume&quot; or &quot;Download CV&quot;).
             </p>
-          </form>
+          </div>
         </div>
       ) : (
         /* Empty State: No resume uploaded */

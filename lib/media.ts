@@ -33,6 +33,41 @@ export function validateVideoFile(file: File, maxMb = 250): MediaValidationResul
   return { valid: true };
 }
 
+export function extractGoogleDriveFileId(url?: string): string | null {
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+
+  // Pattern 1: /file/d/FILE_ID
+  const fileDMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (fileDMatch && fileDMatch[1]) {
+    return fileDMatch[1];
+  }
+
+  // Pattern 2: id=FILE_ID or &id=FILE_ID
+  const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch && idMatch[1]) {
+    return idMatch[1];
+  }
+
+  // Pattern 3: Bare file ID
+  if (/^[a-zA-Z0-9_-]{20,60}$/.test(trimmed) && !trimmed.includes("http") && !trimmed.includes(".")) {
+    return trimmed;
+  }
+
+  return null;
+}
+
+export function getGoogleDriveEmbedUrl(urlOrId?: string): string | null {
+  const fileId = extractGoogleDriveFileId(urlOrId);
+  if (!fileId) return null;
+  return `https://drive.google.com/file/d/${fileId}/preview`;
+}
+
+export function isValidGoogleDriveUrl(url?: string): boolean {
+  if (!url || !url.trim()) return false;
+  return extractGoogleDriveFileId(url) !== null;
+}
+
 export function isVideoUrl(url?: string): boolean {
   if (!url) return false;
   const lower = url.toLowerCase();
@@ -43,12 +78,18 @@ export function isVideoUrl(url?: string): boolean {
     lower.includes("video/") ||
     lower.includes("youtube.com") ||
     lower.includes("youtu.be") ||
-    lower.includes("vimeo.com")
+    lower.includes("vimeo.com") ||
+    lower.includes("drive.google.com") ||
+    extractGoogleDriveFileId(url) !== null
   );
 }
 
 export function getEmbedVideoUrl(url: string): string {
   if (!url) return "";
+  if (url.includes("drive.google.com") || extractGoogleDriveFileId(url)) {
+    const embedUrl = getGoogleDriveEmbedUrl(url);
+    if (embedUrl) return embedUrl;
+  }
   if (url.includes("youtube.com/watch?v=")) {
     const videoId = url.split("v=")[1]?.split("&")[0];
     return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
@@ -63,3 +104,53 @@ export function getEmbedVideoUrl(url: string): string {
   }
   return url;
 }
+
+export function isVideoCategory(categoryStr?: string): boolean {
+  if (!categoryStr) return false;
+  const c = categoryStr.toUpperCase().trim();
+  return (
+    c.includes("AI VIDEO") ||
+    c.includes("VIDEO AD") ||
+    c.includes("COMMERCIAL") ||
+    c.includes("REEL") ||
+    c.includes("TIKTOK") ||
+    c === "AI VIDEO AD" ||
+    c === "PRODUCT DEMO"
+  );
+}
+
+export function isWebsiteCategory(categoryStr?: string): boolean {
+  if (!categoryStr) return false;
+  const c = categoryStr.toUpperCase().trim();
+  return (
+    c.includes("WEB") ||
+    c.includes("SITE") ||
+    c.includes("APP") ||
+    c.includes("DEV") ||
+    c === "WEBSITE"
+  );
+}
+
+export function isLogoCategory(categoryStr?: string): boolean {
+  if (!categoryStr) return false;
+  const c = categoryStr.toUpperCase().trim();
+  return (
+    c.includes("LOGO") ||
+    c.includes("BRAND") ||
+    c.includes("IDENTITY")
+  );
+}
+
+export function isGraphicsCategory(categoryStr?: string): boolean {
+  if (!categoryStr) return false;
+  const c = categoryStr.toUpperCase().trim();
+  return (
+    c.includes("GRAPHIC") ||
+    c.includes("CREATIVE") ||
+    c.includes("POSTER") ||
+    c.includes("BANNER") ||
+    c.includes("DESIGN")
+  );
+}
+
+

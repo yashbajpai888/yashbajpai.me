@@ -203,3 +203,123 @@ export async function deleteStorageFile(storagePathOrUrl?: string): Promise<void
     console.warn("Notice during storage file removal:", err);
   }
 }
+
+/**
+ * Uploads a preview image to Cloudinary (with automatic client compression and fallback).
+ */
+export async function uploadToCloudinary(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<{ url: string; publicId: string; provider: string }> {
+  if (onProgress) onProgress(10);
+
+  // Compress image if needed before uploading
+  let fileToUpload = file;
+  if (file.type.startsWith("image/")) {
+    try {
+      fileToUpload = await compressImageFile(file);
+    } catch (compressErr) {
+      console.warn("Image compression notice:", compressErr);
+    }
+  }
+
+  if (onProgress) onProgress(30);
+
+  // 1. Try Next.js Cloudinary API route /api/upload
+  try {
+    const formData = new FormData();
+    formData.append("file", fileToUpload);
+
+    const apiRes = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.url) {
+        if (onProgress) onProgress(100);
+        return { 
+          url: data.url, 
+          publicId: data.publicId || "", 
+          provider: data.provider || "cloudinary" 
+        };
+      }
+    }
+  } catch (apiErr) {
+    console.warn("Notice: /api/upload route call warning:", apiErr);
+  }
+
+  if (onProgress) onProgress(50);
+
+  // 2. Try direct Cloudinary REST endpoint if env vars are present on client
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+  if (cloudName && uploadPreset && cloudName !== "your_cloudinary_cloud_name") {
+    try {
+      const cFormData = new FormData();
+      cFormData.append("file", fileToUpload);
+      cFormData.append("upload_preset", uploadPreset);
+
+      const cRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: "POST",
+        body: cFormData,
+      });
+
+      if (cRes.ok) {
+        const cData = await cRes.json();
+        if (cData.secure_url) {
+          if (onProgress) onProgress(100);
+          return { 
+            url: cData.secure_url, 
+            publicId: cData.public_id || "", 
+            provider: "cloudinary" 
+          };
+        }
+      }
+    } catch (cErr) {
+      console.warn("Direct Cloudinary upload notice:", cErr);
+    }
+  }
+
+  if (onProgress) onProgress(70);
+
+  // 3. Fallback to Firebase Storage upload
+  const fbResult = await uploadMediaFileWithResult(fileToUpload, {
+    folder: "projects/previews",
+    onProgress: (p) => {
+      if (onProgress) onProgress(Math.round(70 + (p * 0.3)));
+    },
+  });
+
+  if (onProgress) onProgress(100);
+  return { 
+    url: fbResult.url, 
+    publicId: fbResult.storagePath || "", 
+    provider: "firebase" 
+  };
+}
+
+/**
+ * Safely requests authenticated deletion of a Cloudinary asset via secure server API endpoint.
+ */
+export async function deleteCloudinaryAsset(publicId?: string): Promise<boolean> {
+  if (!publicId || !publicId.trim()) return false;
+  try {
+    const res = await fetch("/api/cloudinary/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicId: publicId.trim() }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.success === true;
+    }
+  } catch (err) {
+    console.warn("Notice: Cloudinary deletion API request error:", err);
+  }
+  return false;
+}
+
+

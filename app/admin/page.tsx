@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAdminAuth } from "@/lib/hooks/useAdminAuth";
-import { Sparkles, KeyRound, Mail, AlertCircle, ArrowLeft, LogOut, CheckCircle2 } from "lucide-react";
+import { Sparkles, KeyRound, Mail, AlertCircle, ArrowLeft, LogOut, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminLoginPage() {
@@ -12,6 +12,7 @@ export default function AdminLoginPage() {
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isResetMode, setIsResetMode] = useState(false);
@@ -286,13 +287,25 @@ export default function AdminLoginPage() {
                     <KeyRound className="w-4 h-4" />
                   </div>
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-[#111116] border border-[#22222d] rounded-md pl-10 pr-4 py-2.5 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500 transition-colors"
+                    className="w-full bg-[#111116] border border-[#22222d] rounded-md pl-10 pr-10 py-2.5 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500 transition-colors"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-neutral-500 hover:text-neutral-300 transition-colors"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
               </div>
 

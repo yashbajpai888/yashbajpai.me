@@ -13,8 +13,16 @@ import {
   Timestamp 
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { uploadMediaFileWithResult, deleteStorageFile } from "@/lib/upload";
-import { validateImageFile, validateVideoFile } from "@/lib/media";
+import { uploadToCloudinary, deleteStorageFile, deleteCloudinaryAsset } from "@/lib/upload";
+import { 
+  validateImageFile, 
+  extractGoogleDriveFileId, 
+  getGoogleDriveEmbedUrl, 
+  isVideoCategory,
+  isWebsiteCategory,
+  isLogoCategory,
+  isGraphicsCategory
+} from "@/lib/media";
 import { 
   FolderGit, 
   Plus, 
@@ -32,7 +40,8 @@ import {
   Image as ImageIcon,
   Play,
   Film as FilmIcon,
-  CheckCircle2
+  CheckCircle2,
+  RefreshCw
 } from "lucide-react";
 
 export interface Project {
@@ -42,6 +51,13 @@ export interface Project {
   category: string;
   image: string;
   imagePath?: string;
+  previewImageUrl?: string;
+  previewImagePublicId?: string;
+  previewObjectFit?: "cover" | "contain";
+  previewObjectPosition?: string;
+  googleDriveUrl?: string;
+  googleDriveFileId?: string;
+  googleDriveEmbedUrl?: string;
   videoUrl?: string;
   videoPath?: string;
   videoPreviewUrl?: string;
@@ -54,6 +70,7 @@ export interface Project {
 const SECTION_OPTIONS = [
   { id: "WEBSITE", label: "Website Design & Dev", icon: Layout, categoryTag: "WEBSITE" },
   { id: "LOGO DESIGN", label: "Logo & Brand Design", icon: Palette, categoryTag: "LOGO DESIGN" },
+  { id: "GRAPHICS", label: "Graphic Design & Creatives", icon: Palette, categoryTag: "GRAPHICS" },
   { id: "AI VIDEO AD", label: "AI Video Ads", icon: Video, categoryTag: "AI VIDEO AD" },
   { id: "PRODUCT DEMO", label: "Product Demo Videos", icon: Film, categoryTag: "PRODUCT DEMO" }
 ];
@@ -70,7 +87,7 @@ export default function AdminProjectsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   
-  // Fields
+  // Base Fields
   const [formNum, setFormNum] = useState("");
   const [formTitle, setFormTitle] = useState("");
   const [formCategory, setFormCategory] = useState("WEBSITE");
@@ -78,121 +95,102 @@ export default function AdminProjectsPage() {
   const [formTags, setFormTags] = useState("");
   const [formLink, setFormLink] = useState("");
 
-  // Media 1: Thumbnail Image
-  const [formImage, setFormImage] = useState("");
-  const [formImagePath, setFormImagePath] = useState("");
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [imageProgress, setImageProgress] = useState(0);
+  // Enhanced Media & Fit Management State
+  const [formPreviewImageUrl, setFormPreviewImageUrl] = useState("");
+  const [formPreviewImagePublicId, setFormPreviewImagePublicId] = useState("");
+  const [formPreviewObjectFit, setFormPreviewObjectFit] = useState<"cover" | "contain">("cover");
+  const [formPreviewObjectPosition, setFormPreviewObjectPosition] = useState("center center");
 
-  // Media 2: Project Video
-  const [formVideoUrl, setFormVideoUrl] = useState("");
-  const [formVideoPath, setFormVideoPath] = useState("");
-  const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [videoProgress, setVideoProgress] = useState(0);
+  const [previewImageFileName, setPreviewImageFileName] = useState("");
+  const [uploadingPreviewImage, setUploadingPreviewImage] = useState(false);
+  const [previewImageProgress, setPreviewImageProgress] = useState(0);
+  const [previewImageProvider, setPreviewImageProvider] = useState("");
 
-  // Media 3: Project Video Preview / Poster
-  const [formVideoPreviewUrl, setFormVideoPreviewUrl] = useState("");
-  const [formVideoPreviewPath, setFormVideoPreviewPath] = useState("");
-  const [uploadingVideoPreview, setUploadingVideoPreview] = useState(false);
-  const [videoPreviewProgress, setVideoPreviewProgress] = useState(0);
+  // Confirm Dialog for Deleting Image
+  const [showDeleteImageConfirm, setShowDeleteImageConfirm] = useState(false);
+
+  // Video Specific State (Only used when formCategory is Video)
+  const [formGoogleDriveUrl, setFormGoogleDriveUrl] = useState("");
 
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [testVideoModalUrl, setTestVideoModalUrl] = useState<string | null>(null);
 
-  // Upload Handlers
-  const handleUploadThumbnail = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Real-time Drive calculation for Video Categories
+  const isCurrentVideoType = isVideoCategory(formCategory);
+  const driveFileId = isCurrentVideoType ? extractGoogleDriveFileId(formGoogleDriveUrl) : null;
+  const driveEmbedUrl = driveFileId ? getGoogleDriveEmbedUrl(formGoogleDriveUrl) : null;
+
+  // Cloudinary Preview / Asset Image Upload Handler with Public ID storage & safe cleanup
+  const handleUploadAssetImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setMediaError(null);
     const val = validateImageFile(file);
     if (!val.valid) {
-      setMediaError(`Thumbnail Image: ${val.error}`);
+      setMediaError(`Image Upload: ${val.error}`);
       e.target.value = "";
       return;
     }
 
-    setUploadingImage(true);
-    setImageProgress(0);
+    setUploadingPreviewImage(true);
+    setPreviewImageProgress(0);
+    setPreviewImageFileName(file.name);
 
     try {
-      const res = await uploadMediaFileWithResult(file, {
-        folder: "projects/thumbnails",
-        onProgress: (p) => setImageProgress(Math.round(p)),
-      });
-      setFormImage(res.url);
-      setFormImagePath(res.storagePath);
+      const res = await uploadToCloudinary(file, (p) => setPreviewImageProgress(p));
+      
+      const oldPublicId = formPreviewImagePublicId;
+
+      setFormPreviewImageUrl(res.url);
+      setFormPreviewImagePublicId(res.publicId || "");
+      setPreviewImageProvider(res.provider);
+
+      // Clean up prior remote Cloudinary asset AFTER successful upload
+      if (oldPublicId && oldPublicId !== res.publicId) {
+        deleteCloudinaryAsset(oldPublicId);
+      }
     } catch (err: any) {
-      console.error("Thumbnail upload failed:", err);
-      setMediaError(`Thumbnail Upload Failed: ${err.message || err}`);
+      console.error("Asset image upload failed:", err);
+      setMediaError(`Image Upload Failed: ${err.message || err}`);
     } finally {
-      setUploadingImage(false);
-      setImageProgress(0);
+      setUploadingPreviewImage(false);
+      setPreviewImageProgress(0);
       e.target.value = "";
     }
   };
 
-  const handleUploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Safe Image Delete Confirmation & Firestore Sync
+  const handleConfirmDeleteImage = async () => {
+    setShowDeleteImageConfirm(false);
+    const targetPublicId = formPreviewImagePublicId;
+    const targetUrl = formPreviewImageUrl;
 
-    setMediaError(null);
-    const val = validateVideoFile(file);
-    if (!val.valid) {
-      setMediaError(`Project Video: ${val.error}`);
-      e.target.value = "";
-      return;
+    setFormPreviewImageUrl("");
+    setFormPreviewImagePublicId("");
+    setPreviewImageFileName("");
+    setPreviewImageProvider("");
+
+    if (targetPublicId) {
+      deleteCloudinaryAsset(targetPublicId);
+    } else if (targetUrl && !targetUrl.startsWith("http")) {
+      deleteStorageFile(targetUrl);
     }
 
-    setUploadingVideo(true);
-    setVideoProgress(0);
-
-    try {
-      const res = await uploadMediaFileWithResult(file, {
-        folder: "projects/videos",
-        onProgress: (p) => setVideoProgress(Math.round(p)),
-      });
-      setFormVideoUrl(res.url);
-      setFormVideoPath(res.storagePath);
-    } catch (err: any) {
-      console.error("Video upload failed:", err);
-      setMediaError(`Video Upload Failed: ${err.message || err}`);
-    } finally {
-      setUploadingVideo(false);
-      setVideoProgress(0);
-      e.target.value = "";
-    }
-  };
-
-  const handleUploadVideoPreview = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setMediaError(null);
-    const val = validateImageFile(file);
-    if (!val.valid) {
-      setMediaError(`Video Preview: ${val.error}`);
-      e.target.value = "";
-      return;
-    }
-
-    setUploadingVideoPreview(true);
-    setVideoPreviewProgress(0);
-
-    try {
-      const res = await uploadMediaFileWithResult(file, {
-        folder: "projects/previews",
-        onProgress: (p) => setVideoPreviewProgress(Math.round(p)),
-      });
-      setFormVideoPreviewUrl(res.url);
-      setFormVideoPreviewPath(res.storagePath);
-    } catch (err: any) {
-      console.error("Video Preview upload failed:", err);
-      setMediaError(`Video Preview Upload Failed: ${err.message || err}`);
-    } finally {
-      setUploadingVideoPreview(false);
-      setVideoPreviewProgress(0);
-      e.target.value = "";
+    if (editingProject) {
+      try {
+        const docRef = doc(db, "projects", editingProject.id);
+        await updateDoc(docRef, {
+          image: "",
+          previewImageUrl: "",
+          previewImagePublicId: "",
+          videoPreviewUrl: "",
+          updatedAt: Timestamp.now(),
+        });
+      } catch (err) {
+        console.warn("Failed to clear image doc in Firestore:", err);
+      }
     }
   };
 
@@ -210,8 +208,15 @@ export default function AdminProjectsPage() {
           num: d.num || "01",
           title: d.title || "",
           category: d.category || "",
-          image: d.image || "",
+          image: d.image || d.previewImageUrl || d.videoPreviewUrl || "",
           imagePath: d.imagePath || "",
+          previewImageUrl: d.previewImageUrl || d.image || d.videoPreviewUrl || "",
+          previewImagePublicId: d.previewImagePublicId || "",
+          previewObjectFit: d.previewObjectFit || "cover",
+          previewObjectPosition: d.previewObjectPosition || "center center",
+          googleDriveUrl: d.googleDriveUrl || "",
+          googleDriveFileId: d.googleDriveFileId || "",
+          googleDriveEmbedUrl: d.googleDriveEmbedUrl || "",
           videoUrl: d.videoUrl || "",
           videoPath: d.videoPath || "",
           videoPreviewUrl: d.videoPreviewUrl || "",
@@ -240,12 +245,13 @@ export default function AdminProjectsPage() {
     setFormNum(String(projects.length + 1).padStart(2, "0"));
     setFormTitle("");
     setFormCategory(presetCategory || (adminFilter !== "ALL" ? adminFilter : "WEBSITE"));
-    setFormImage("");
-    setFormImagePath("");
-    setFormVideoUrl("");
-    setFormVideoPath("");
-    setFormVideoPreviewUrl("");
-    setFormVideoPreviewPath("");
+    setFormPreviewImageUrl("");
+    setFormPreviewImagePublicId("");
+    setFormPreviewObjectFit("cover");
+    setFormPreviewObjectPosition("center center");
+    setPreviewImageFileName("");
+    setPreviewImageProvider("");
+    setFormGoogleDriveUrl("");
     setFormDescription("");
     setFormTags("");
     setFormLink("");
@@ -258,12 +264,18 @@ export default function AdminProjectsPage() {
     setFormNum(project.num);
     setFormTitle(project.title);
     setFormCategory(project.category);
-    setFormImage(project.image || "");
-    setFormImagePath(project.imagePath || "");
-    setFormVideoUrl(project.videoUrl || "");
-    setFormVideoPath(project.videoPath || "");
-    setFormVideoPreviewUrl(project.videoPreviewUrl || "");
-    setFormVideoPreviewPath(project.videoPreviewPath || "");
+
+    const existingImage = project.previewImageUrl || project.videoPreviewUrl || project.image || "";
+    setFormPreviewImageUrl(existingImage);
+    setFormPreviewImagePublicId(project.previewImagePublicId || "");
+    setFormPreviewObjectFit(project.previewObjectFit || "cover");
+    setFormPreviewObjectPosition(project.previewObjectPosition || "center center");
+    setPreviewImageFileName(existingImage ? "Asset Loaded" : "");
+    setPreviewImageProvider(existingImage.includes("cloudinary") ? "cloudinary" : "");
+
+    const existingDriveUrl = project.googleDriveUrl || (project.videoUrl && project.videoUrl.includes("drive.google.com") ? project.videoUrl : "");
+    setFormGoogleDriveUrl(existingDriveUrl);
+
     setFormDescription(project.description);
     setFormTags(project.tags.join(", "));
     setFormLink(project.link);
@@ -277,8 +289,19 @@ export default function AdminProjectsPage() {
       return;
     }
 
-    if (uploadingImage || uploadingVideo || uploadingVideoPreview) {
-      alert("Please wait for all media uploads to complete before saving.");
+    const isVideoType = isVideoCategory(formCategory);
+
+    // Google Drive Link Validation ONLY for Video Projects
+    if (isVideoType && formGoogleDriveUrl.trim() !== "") {
+      const fileId = extractGoogleDriveFileId(formGoogleDriveUrl);
+      if (!fileId) {
+        setMediaError("Please enter a valid Google Drive video link.");
+        return;
+      }
+    }
+
+    if (uploadingPreviewImage) {
+      alert("Please wait for image upload to complete before saving.");
       return;
     }
 
@@ -289,16 +312,24 @@ export default function AdminProjectsPage() {
       .map(tag => tag.trim())
       .filter(tag => tag.length > 0);
 
+    const extractedFileId = isVideoType ? (extractGoogleDriveFileId(formGoogleDriveUrl) || "") : "";
+    const calculatedEmbedUrl = extractedFileId ? `https://drive.google.com/file/d/${extractedFileId}/preview` : "";
+
     const projectPayload = {
       num: formNum,
       title: formTitle.trim(),
       category: formCategory.trim(),
-      image: formImage,
-      imagePath: formImagePath,
-      videoUrl: formVideoUrl,
-      videoPath: formVideoPath,
-      videoPreviewUrl: formVideoPreviewUrl,
-      videoPreviewPath: formVideoPreviewPath,
+      image: formPreviewImageUrl,
+      previewImageUrl: formPreviewImageUrl,
+      previewImagePublicId: formPreviewImagePublicId,
+      previewObjectFit: formPreviewObjectFit || "cover",
+      previewObjectPosition: formPreviewObjectPosition || "center center",
+      googleDriveUrl: isVideoType ? formGoogleDriveUrl.trim() : "",
+      googleDriveFileId: extractedFileId,
+      googleDriveEmbedUrl: calculatedEmbedUrl,
+      // Backward compatibility fields for legacy views:
+      videoUrl: isVideoType ? (calculatedEmbedUrl || editingProject?.videoUrl || "") : "",
+      videoPreviewUrl: formPreviewImageUrl || editingProject?.videoPreviewUrl || "",
       description: formDescription,
       tags: parsedTags,
       link: formLink || "#",
@@ -307,25 +338,8 @@ export default function AdminProjectsPage() {
 
     try {
       if (editingProject) {
-        // Track prior paths for old storage cleanup
-        const oldImagePath = editingProject.imagePath;
-        const oldVideoPath = editingProject.videoPath;
-        const oldVideoPreviewPath = editingProject.videoPreviewPath;
-
         const docRef = doc(db, "projects", editingProject.id);
         await updateDoc(docRef, projectPayload);
-
-        // Safe cleanup of replaced storage files AFTER Firestore update succeeds
-        if (oldImagePath && oldImagePath !== formImagePath) {
-          deleteStorageFile(oldImagePath);
-        }
-        if (oldVideoPath && oldVideoPath !== formVideoPath) {
-          deleteStorageFile(oldVideoPath);
-        }
-        if (oldVideoPreviewPath && oldVideoPreviewPath !== formVideoPreviewPath) {
-          deleteStorageFile(oldVideoPreviewPath);
-        }
-
         alert("Project updated successfully!");
       } else {
         await addDoc(collection(db, "projects"), {
@@ -349,8 +363,7 @@ export default function AdminProjectsPage() {
 
     try {
       await deleteDoc(doc(db, "projects", project.id));
-      
-      // Clean up storage files if present
+      if (project.previewImagePublicId) deleteCloudinaryAsset(project.previewImagePublicId);
       if (project.imagePath) deleteStorageFile(project.imagePath);
       if (project.videoPath) deleteStorageFile(project.videoPath);
       if (project.videoPreviewPath) deleteStorageFile(project.videoPreviewPath);
@@ -370,14 +383,16 @@ export default function AdminProjectsPage() {
     if (key === "ALL") return true;
 
     const isLogo = cat.includes("LOGO") || cat.includes("BRAND") || cat.includes("IDENTITY");
+    const isGraphics = cat.includes("GRAPHIC") || cat.includes("CREATIVE") || cat.includes("POSTER") || cat.includes("BANNER");
     const isAiAd = cat.includes("AI") || cat.includes("AD") || cat.includes("REELS") || cat.includes("TIKTOK");
     const isDemo = cat.includes("PRODUCT") || cat.includes("DEMO") || cat.includes("EXPLAINER") || cat.includes("WALKTHROUGH");
 
     if (key === "WEBSITE" || key === "WEBSITES") {
       if (cat.includes("WEB") || cat.includes("SITE") || cat.includes("APP") || cat.includes("DEV") || cat.includes("STORE") || cat === "WEBSITE" || cat === "") return true;
-      return !isLogo && !isAiAd && !isDemo;
+      return !isLogo && !isGraphics && !isAiAd && !isDemo;
     }
     if (key === "LOGO DESIGN" || key === "LOGO") return isLogo;
+    if (key === "GRAPHICS" || key === "GRAPHIC DESIGN") return isGraphics;
     if (key === "AI VIDEO AD" || key === "AI VIDEO ADS" || key === "AI VIDEO") return isAiAd;
     if (key === "PRODUCT DEMO" || key === "PRODUCT DEMOS") return isDemo;
 
@@ -388,7 +403,7 @@ export default function AdminProjectsPage() {
   const getSectionCount = (filterKey: string) => projects.filter((p) => matchCategory(p.category, filterKey)).length;
 
   return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto w-full flex-1 flex flex-col space-y-8">
+    <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto w-full flex-1 flex flex-col space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-[#1a1a24] pb-6 gap-4">
         <div>
@@ -397,7 +412,7 @@ export default function AdminProjectsPage() {
             <FolderGit className="w-5 h-5 text-rose-500" />
           </h1>
           <p className="text-xs text-neutral-400 uppercase tracking-wider mt-1">
-            Manage Website, Logo Design, AI Video Commercials &amp; Product Demos with separate Video &amp; Poster controls
+            Service-Specific Media Workflows &amp; 16:9 Image Fit/Position Management
           </p>
         </div>
         <button
@@ -416,8 +431,8 @@ export default function AdminProjectsPage() {
         </div>
       )}
 
-      {/* 4 Dedicated Section Quick Upload Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Quick Filter Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {SECTION_OPTIONS.map((sec) => {
           const Icon = sec.icon;
           const count = getSectionCount(sec.id);
@@ -440,7 +455,7 @@ export default function AdminProjectsPage() {
                   {count}
                 </span>
               </div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-1">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-1 truncate">
                 {sec.label}
               </h3>
               <div className="flex items-center justify-between pt-2">
@@ -468,7 +483,7 @@ export default function AdminProjectsPage() {
           <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 mr-2 shrink-0">
             SHOW SECTION:
           </span>
-          {["ALL", "WEBSITE", "LOGO DESIGN", "AI VIDEO AD", "PRODUCT DEMO"].map((filter) => (
+          {["ALL", "WEBSITE", "LOGO DESIGN", "GRAPHICS", "AI VIDEO AD", "PRODUCT DEMO"].map((filter) => (
             <button
               key={filter}
               onClick={() => setAdminFilter(filter)}
@@ -507,27 +522,36 @@ export default function AdminProjectsPage() {
           </button>
         </div>
       ) : (
-        /* Projects List */
+        /* Projects List Grid with Consistent 16:9 Aspect Ratio */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProjects.map((project) => {
-            const previewImage = project.videoPreviewUrl || project.image;
+            const previewImage = project.previewImageUrl || project.videoPreviewUrl || project.image;
+            const isVideo = isVideoCategory(project.category);
+            const hasVideo = isVideo && !!(project.googleDriveUrl || project.googleDriveEmbedUrl || project.videoUrl);
+            const objectFit = project.previewObjectFit || "cover";
+            const objectPosition = project.previewObjectPosition || "center center";
+
             return (
               <div
                 key={project.id}
                 className="group flex flex-col bg-[#0b0b0e] border border-[#1a1a24] rounded overflow-hidden relative shadow-md hover:border-rose-600/40 transition-colors"
               >
-                {/* Project Card Thumbnail/Poster Preview */}
-                <div className="relative w-full aspect-[16/10] overflow-hidden bg-[#111116] border-b border-[#14141c]">
+                {/* Project Card Preview Image Container (Fixed 16:9 Aspect Ratio) */}
+                <div className="relative w-full aspect-[16/9] overflow-hidden bg-[#0a0a0f] border-b border-[#14141c]">
                   {previewImage ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={previewImage}
                       alt={project.title}
-                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
+                      style={{
+                        objectFit: objectFit as any,
+                        objectPosition: objectPosition,
+                      }}
+                      className="w-full h-full group-hover:scale-105 transition-transform duration-700 ease-out"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xs text-neutral-600 font-mono">
-                      No preview image loaded
+                      No image loaded
                     </div>
                   )}
                   <div className="absolute inset-0 bg-black/40 group-hover:bg-black/10 transition-colors" />
@@ -536,10 +560,10 @@ export default function AdminProjectsPage() {
                     PROJ {project.num}
                   </div>
 
-                  {project.videoUrl && (
+                  {hasVideo && (
                     <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-black/80 border border-white/20 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-rose-400">
                       <Play className="w-3 h-3 fill-rose-400" />
-                      <span>Has Video</span>
+                      <span>Google Drive Video</span>
                     </div>
                   )}
                 </div>
@@ -596,26 +620,26 @@ export default function AdminProjectsPage() {
         </div>
       )}
 
-      {/* Add/Edit Modal */}
+      {/* Service-Conditional Add/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="relative w-full max-w-2xl bg-[#0e0e14] border border-[#222230] rounded-xl p-6 sm:p-8 shadow-2xl overflow-y-auto max-h-[92vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md">
+          <div className="relative w-full max-w-2xl bg-[#0e0e14] border border-[#222230] rounded-xl p-5 sm:p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
             {/* Close Button */}
             <button
               onClick={() => setIsModalOpen(false)}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-[#181822] border border-[#2a2a38] flex items-center justify-center text-neutral-400 hover:text-white hover:bg-rose-600 transition-colors"
+              className="absolute top-4 right-4 sm:top-5 sm:right-5 w-8 h-8 rounded-full bg-[#181822] border border-[#2a2a38] flex items-center justify-center text-neutral-400 hover:text-white hover:bg-rose-600 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
 
             {/* Header */}
             <div className="mb-6">
-              <h3 className="font-condensed text-2xl font-extrabold uppercase text-white flex items-center gap-2">
+              <h3 className="font-condensed text-xl sm:text-2xl font-extrabold uppercase text-white flex items-center gap-2">
                 <span>{editingProject ? "Edit Project Details" : "Upload New Project"}</span>
                 <Sparkles className="w-4 h-4 text-rose-500 fill-rose-500" />
               </h3>
               <p className="text-neutral-400 text-xs mt-1">
-                Configure project metadata and separate Upload controls for Video and Video Preview Poster image.
+                Configure project metadata, service-specific media &amp; 16:9 aspect ratio presentation.
               </p>
             </div>
 
@@ -627,25 +651,29 @@ export default function AdminProjectsPage() {
             )}
 
             <form onSubmit={handleFormSubmit} className="space-y-5">
-              {/* Target Section Select Dropdown */}
+              {/* TARGET SECTION / SERVICE DROPDOWN */}
               <div>
                 <label className="block text-[10px] uppercase font-bold tracking-wider text-rose-400 mb-1.5">
                   TARGET SECTION / SERVICE
                 </label>
                 <select
                   value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value)}
-                  className="w-full bg-[#14141c] border border-rose-900/60 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500 transition-colors font-semibold"
+                  onChange={(e) => {
+                    setFormCategory(e.target.value);
+                    if (mediaError) setMediaError(null);
+                  }}
+                  className="w-full bg-[#14141c] border border-rose-900/60 rounded px-3 py-2.5 text-xs text-white focus:outline-none focus:border-rose-500 transition-colors font-semibold"
                 >
                   <option value="WEBSITE">💻 WEBSITE (Website Design &amp; Dev)</option>
                   <option value="LOGO DESIGN">🎨 LOGO DESIGN (Logo &amp; Brand Design)</option>
+                  <option value="GRAPHICS">🖼️ GRAPHICS (Graphic Design &amp; Creatives)</option>
                   <option value="AI VIDEO AD">🎬 AI VIDEO AD (AI Video Commercials)</option>
-                  <option value="PRODUCT DEMO">📹 PRODUCT DEMO (Product Walkthroughs)</option>
+                  <option value="PRODUCT DEMO">📹 PRODUCT DEMO (Product Walkthroughs &amp; Demos)</option>
                 </select>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-1">
                   <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 mb-1.5">
                     Order Number
                   </label>
@@ -658,7 +686,7 @@ export default function AdminProjectsPage() {
                     className="w-full bg-[#14141c] border border-[#242432] rounded px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500 font-mono"
                   />
                 </div>
-                <div className="col-span-2">
+                <div className="sm:col-span-2">
                   <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 mb-1.5">
                     Project Title
                   </label>
@@ -673,166 +701,638 @@ export default function AdminProjectsPage() {
                 </div>
               </div>
 
-              {/* MEDIA SECTION: 3 SEPARATE FIELDS */}
-              <div className="p-4 bg-[#121218] border border-[#222232] rounded-lg space-y-4">
-                <h4 className="text-xs uppercase font-bold tracking-wider text-rose-500 flex items-center gap-2 border-b border-[#1c1c28] pb-2">
-                  <FilmIcon className="w-4 h-4" />
-                  <span>Media Assets (Separate Video &amp; Poster Controls)</span>
-                </h4>
+              {/* ========================================================= */}
+              {/* SERVICE-SPECIFIC MEDIA WORKFLOW + 16:9 FIT/POSITION CONTROLS*/}
+              {/* ========================================================= */}
 
-                {/* 1. THUMBNAIL IMAGE */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-300 flex items-center gap-1.5">
-                      <ImageIcon className="w-3.5 h-3.5 text-neutral-400" />
-                      <span>1. Thumbnail Image (Card Cover)</span>
-                    </label>
-                    {formImage && (
-                      <button
-                        type="button"
-                        onClick={() => { setFormImage(""); setFormImagePath(""); }}
-                        className="text-[9px] uppercase font-bold text-rose-400 hover:underline"
-                      >
-                        Remove
-                      </button>
-                    )}
+              {/* 1. AI VIDEO AD & PRODUCT DEMO (VIDEO PROJECTS) */}
+              {isVideoCategory(formCategory) && (
+                <div className="p-4 bg-[#121218] border border-[#222232] rounded-lg space-y-5">
+                  <div className="flex items-center justify-between border-b border-[#1c1c28] pb-2.5">
+                    <h4 className="text-xs uppercase font-bold tracking-wider text-rose-500 flex items-center gap-2">
+                      <FilmIcon className="w-4 h-4" />
+                      <span>VIDEO PROJECT MEDIA</span>
+                    </h4>
+                    <span className="text-[10px] text-neutral-500 font-medium">Cloudinary Poster + Google Drive</span>
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={formImage}
-                      onChange={(e) => setFormImage(e.target.value)}
-                      placeholder="/images/project_thumbnail.jpg or upload below..."
-                      className="flex-1 bg-[#161622] border border-[#28283a] rounded px-3 py-1.5 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500 font-mono"
-                    />
-                    <label className="cursor-pointer bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase px-3.5 py-1.5 rounded flex items-center justify-center gap-1.5 transition-colors select-none shrink-0">
-                      {uploadingImage ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>{imageProgress}%</span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Upload Image</span>
-                        </>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleUploadThumbnail}
-                        disabled={uploadingImage}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
 
-                {/* 2. PROJECT VIDEO */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-300 flex items-center gap-1.5">
-                      <Video className="w-3.5 h-3.5 text-rose-400" />
-                      <span>2. Project Video (MP4 / WebM File)</span>
-                    </label>
-                    {formVideoUrl && (
-                      <button
-                        type="button"
-                        onClick={() => { setFormVideoUrl(""); setFormVideoPath(""); }}
-                        className="text-[9px] uppercase font-bold text-rose-400 hover:underline"
-                      >
-                        Remove Video
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={formVideoUrl}
-                      onChange={(e) => setFormVideoUrl(e.target.value)}
-                      placeholder="e.g. https://storage.googleapis.com/.../demo.mp4"
-                      className="flex-1 bg-[#161622] border border-[#28283a] rounded px-3 py-1.5 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500 font-mono"
-                    />
-                    <label className="cursor-pointer bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase px-3.5 py-1.5 rounded flex items-center justify-center gap-1.5 transition-colors select-none shrink-0">
-                      {uploadingVideo ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Uploading... {videoProgress}%</span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Upload Video</span>
-                        </>
+                  {/* VIDEO PREVIEW / POSTER */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-300 flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-rose-400" />
+                        <span>1. VIDEO PREVIEW / POSTER</span>
+                      </label>
+                      {formPreviewImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setShowDeleteImageConfirm(true)}
+                          className="text-[9px] uppercase font-bold text-rose-400 hover:underline flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete Image</span>
+                        </button>
                       )}
-                      <input
-                        type="file"
-                        accept="video/*,.mp4,.webm,.mov"
-                        onChange={handleUploadVideo}
-                        disabled={uploadingVideo}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                  {formVideoUrl && (
-                    <p className="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>Video file configured</span>
+                    </div>
+
+                    <p className="text-[10px] text-neutral-400 leading-normal">
+                      Upload the image that will appear as the project/video card preview. The image will be stored on Cloudinary.
                     </p>
-                  )}
-                </div>
 
-                {/* 3. PROJECT VIDEO PREVIEW / POSTER */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-300 flex items-center gap-1.5">
-                      <ImageIcon className="w-3.5 h-3.5 text-rose-400" />
-                      <span>3. Project Video Preview / Poster Image (WebP / JPG / PNG)</span>
-                    </label>
-                    {formVideoPreviewUrl && (
-                      <button
-                        type="button"
-                        onClick={() => { setFormVideoPreviewUrl(""); setFormVideoPreviewPath(""); }}
-                        className="text-[9px] uppercase font-bold text-rose-400 hover:underline"
-                      >
-                        Remove Poster
-                      </button>
+                    {formPreviewImageUrl ? (
+                      <div className="space-y-3 bg-[#14141e] border border-[#26263a] rounded-lg p-3">
+                        {/* 16:9 Aspect Ratio Live Admin Preview Container */}
+                        <div className="relative w-full aspect-[16/9] bg-[#08080d] border border-[#202030] rounded overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={formPreviewImageUrl}
+                            alt="Admin Live Preview"
+                            style={{
+                              objectFit: formPreviewObjectFit,
+                              objectPosition: formPreviewObjectPosition,
+                            }}
+                            className="w-full h-full"
+                          />
+                          <div className="absolute top-2 left-2 z-10 bg-black/80 px-2 py-0.5 rounded text-[8px] font-bold text-rose-400 uppercase tracking-widest border border-white/10">
+                            16:9 Website Card Preview
+                          </div>
+                        </div>
+
+                        {/* Image Fit & Position Adjustment Controls */}
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold tracking-wider text-neutral-400 mb-1">
+                              Image Fit Mode
+                            </label>
+                            <select
+                              value={formPreviewObjectFit}
+                              onChange={(e) => setFormPreviewObjectFit(e.target.value as "cover" | "contain")}
+                              className="w-full bg-[#181824] border border-[#2a2a3c] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
+                            >
+                              <option value="cover">Cover (Fill 16:9 frame)</option>
+                              <option value="contain">Contain (Show full image)</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold tracking-wider text-neutral-400 mb-1">
+                              Focal Position
+                            </label>
+                            <select
+                              value={formPreviewObjectPosition}
+                              onChange={(e) => setFormPreviewObjectPosition(e.target.value)}
+                              className="w-full bg-[#181824] border border-[#2a2a3c] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
+                            >
+                              <option value="center center">Center (Default)</option>
+                              <option value="center top">Top Center</option>
+                              <option value="center bottom">Bottom Center</option>
+                              <option value="left center">Left Center</option>
+                              <option value="right center">Right Center</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-[#1e1e2c]">
+                          <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Cloudinary Poster Loaded</span>
+                          </span>
+
+                          <label className="cursor-pointer bg-[#20202e] hover:bg-[#2a2a3e] border border-[#34344a] text-white font-bold text-[10px] uppercase px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors select-none">
+                            {uploadingPreviewImage ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin text-rose-500" />
+                                <span>Uploading... {previewImageProgress}%</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3 h-3 text-rose-400" />
+                                <span>Replace Image</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleUploadAssetImage}
+                              disabled={uploadingPreviewImage}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer border-2 border-dashed border-[#28283a] hover:border-rose-500/60 bg-[#14141e] hover:bg-[#181824] p-4 rounded-md flex flex-col items-center justify-center text-center transition-all group">
+                        {uploadingPreviewImage ? (
+                          <div className="flex flex-col items-center gap-2">
+                            <Loader2 className="w-6 h-6 animate-spin text-rose-500" />
+                            <span className="text-xs font-bold text-white">Uploading to Cloudinary... {previewImageProgress}%</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="w-9 h-9 rounded-full bg-rose-600/10 border border-rose-500/20 flex items-center justify-center text-rose-500 mb-2 group-hover:scale-110 transition-transform">
+                              <Upload className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-white uppercase tracking-wider">Upload Preview Image</span>
+                            <span className="text-[10px] text-neutral-500 mt-1">JPG, PNG, WebP or SVG up to 10MB</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleUploadAssetImage}
+                          disabled={uploadingPreviewImage}
+                          className="hidden"
+                        />
+                      </label>
                     )}
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={formVideoPreviewUrl}
-                      onChange={(e) => setFormVideoPreviewUrl(e.target.value)}
-                      placeholder="e.g. project-demo-preview.webp"
-                      className="flex-1 bg-[#161622] border border-[#28283a] rounded px-3 py-1.5 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500 font-mono"
-                    />
-                    <label className="cursor-pointer bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase px-3.5 py-1.5 rounded flex items-center justify-center gap-1.5 transition-colors select-none shrink-0">
-                      {uploadingVideoPreview ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Uploading... {videoPreviewProgress}%</span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Upload Poster</span>
-                        </>
+
+                  {/* GOOGLE DRIVE VIDEO LINK */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-300 flex items-center gap-1.5">
+                        <Video className="w-3.5 h-3.5 text-rose-400" />
+                        <span>2. GOOGLE DRIVE VIDEO LINK</span>
+                      </label>
+                      {driveEmbedUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setTestVideoModalUrl(driveEmbedUrl)}
+                          className="text-[9px] uppercase font-bold text-rose-400 hover:text-white flex items-center gap-1 bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded transition-colors"
+                        >
+                          <Play className="w-2.5 h-2.5 fill-current" />
+                          <span>Preview Video</span>
+                        </button>
                       )}
+                    </div>
+
+                    <div className="relative">
                       <input
-                        type="file"
-                        accept="image/*,.webp,.jpg,.jpeg,.png"
-                        onChange={handleUploadVideoPreview}
-                        disabled={uploadingVideoPreview}
-                        className="hidden"
+                        type="text"
+                        value={formGoogleDriveUrl}
+                        onChange={(e) => {
+                          setFormGoogleDriveUrl(e.target.value);
+                          if (mediaError && mediaError.includes("Google Drive")) setMediaError(null);
+                        }}
+                        placeholder="https://drive.google.com/file/d/VIDEO_ID/view"
+                        className={`w-full bg-[#161622] border rounded px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none transition-colors font-mono ${
+                          formGoogleDriveUrl.trim() !== "" && !driveFileId
+                            ? "border-rose-600 focus:border-rose-500"
+                            : formGoogleDriveUrl.trim() !== "" && driveFileId
+                            ? "border-emerald-600/60 focus:border-emerald-500"
+                            : "border-[#28283a] focus:border-rose-500"
+                        }`}
                       />
-                    </label>
+                    </div>
+
+                    <p className="text-[10px] text-neutral-400 leading-normal">
+                      Paste a shareable Google Drive video link. The video will remain hosted on Google Drive and will be displayed on the website using an embedded player.
+                    </p>
+
+                    <div className="p-2.5 rounded bg-[#101017] border border-[#20202d] text-[10px] space-y-1.5">
+                      <p className="text-amber-400/90 font-medium flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Make sure the Google Drive file is shared so that website visitors can view it.</span>
+                      </p>
+
+                      {formGoogleDriveUrl.trim() !== "" && (
+                        <div className="pt-1.5 border-t border-[#1c1c28]">
+                          {driveFileId ? (
+                            <div className="text-emerald-400 flex flex-col gap-0.5">
+                              <span className="font-bold flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Video Link Ready</span>
+                              </span>
+                              <span className="font-mono text-[9px] text-neutral-400">
+                                File ID: {driveFileId}
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="text-rose-400 font-bold flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Please enter a valid Google Drive video link.</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[10px] text-neutral-500 mt-1">
-                    Used as the lightweight visual poster/preview on public project cards before video is clicked.
-                  </p>
                 </div>
-              </div>
+              )}
+
+              {/* 2. WEBSITE PROJECT MEDIA */}
+              {isWebsiteCategory(formCategory) && (
+                <div className="p-4 bg-[#121218] border border-[#222232] rounded-lg space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#1c1c28] pb-2.5">
+                    <h4 className="text-xs uppercase font-bold tracking-wider text-rose-500 flex items-center gap-2">
+                      <Layout className="w-4 h-4" />
+                      <span>WEBSITE PROJECT MEDIA</span>
+                    </h4>
+                    <span className="text-[10px] text-neutral-500 font-medium">Cloudinary Screenshot</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-300 flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-rose-400" />
+                        <span>WEBSITE PREVIEW / SCREENSHOT IMAGE</span>
+                      </label>
+                      {formPreviewImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setShowDeleteImageConfirm(true)}
+                          className="text-[9px] uppercase font-bold text-rose-400 hover:underline flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete Image</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-[10px] text-neutral-400 leading-normal">
+                      Upload the primary website screenshot or UI preview image (stored on Cloudinary).
+                    </p>
+
+                    {formPreviewImageUrl ? (
+                      <div className="space-y-3 bg-[#14141e] border border-[#26263a] rounded-lg p-3">
+                        <div className="relative w-full aspect-[16/9] bg-[#08080d] border border-[#202030] rounded overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={formPreviewImageUrl}
+                            alt="Website Screenshot"
+                            style={{
+                              objectFit: formPreviewObjectFit,
+                              objectPosition: formPreviewObjectPosition,
+                            }}
+                            className="w-full h-full"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold tracking-wider text-neutral-400 mb-1">
+                              Image Fit Mode
+                            </label>
+                            <select
+                              value={formPreviewObjectFit}
+                              onChange={(e) => setFormPreviewObjectFit(e.target.value as "cover" | "contain")}
+                              className="w-full bg-[#181824] border border-[#2a2a3c] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
+                            >
+                              <option value="cover">Cover (Fill 16:9 frame)</option>
+                              <option value="contain">Contain (Show full screenshot)</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold tracking-wider text-neutral-400 mb-1">
+                              Focal Position
+                            </label>
+                            <select
+                              value={formPreviewObjectPosition}
+                              onChange={(e) => setFormPreviewObjectPosition(e.target.value)}
+                              className="w-full bg-[#181824] border border-[#2a2a3c] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
+                            >
+                              <option value="center center">Center (Default)</option>
+                              <option value="center top">Top Center</option>
+                              <option value="center bottom">Bottom Center</option>
+                              <option value="left center">Left Center</option>
+                              <option value="right center">Right Center</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-[#1e1e2c]">
+                          <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Screenshot Loaded</span>
+                          </span>
+
+                          <label className="cursor-pointer bg-[#20202e] hover:bg-[#2a2a3e] border border-[#34344a] text-white font-bold text-[10px] uppercase px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors select-none">
+                            {uploadingPreviewImage ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin text-rose-500" />
+                                <span>Uploading... {previewImageProgress}%</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3 h-3 text-rose-400" />
+                                <span>Replace Screenshot</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleUploadAssetImage}
+                              disabled={uploadingPreviewImage}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer border-2 border-dashed border-[#28283a] hover:border-rose-500/60 bg-[#14141e] hover:bg-[#181824] p-4 rounded-md flex flex-col items-center justify-center text-center transition-all group">
+                        {uploadingPreviewImage ? (
+                          <div className="flex flex-col items-center gap-2">
+                            <Loader2 className="w-6 h-6 animate-spin text-rose-500" />
+                            <span className="text-xs font-bold text-white">Uploading to Cloudinary... {previewImageProgress}%</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="w-9 h-9 rounded-full bg-rose-600/10 border border-rose-500/20 flex items-center justify-center text-rose-500 mb-2 group-hover:scale-110 transition-transform">
+                              <Upload className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-white uppercase tracking-wider">Upload Website Screenshot</span>
+                            <span className="text-[10px] text-neutral-500 mt-1">JPG, PNG, WebP or SVG up to 10MB</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleUploadAssetImage}
+                          disabled={uploadingPreviewImage}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. LOGO DESIGN PROJECT MEDIA */}
+              {isLogoCategory(formCategory) && (
+                <div className="p-4 bg-[#121218] border border-[#222232] rounded-lg space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#1c1c28] pb-2.5">
+                    <h4 className="text-xs uppercase font-bold tracking-wider text-rose-500 flex items-center gap-2">
+                      <Palette className="w-4 h-4" />
+                      <span>LOGO &amp; BRAND MEDIA</span>
+                    </h4>
+                    <span className="text-[10px] text-neutral-500 font-medium">Cloudinary Image Asset</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-300 flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-rose-400" />
+                        <span>LOGO / BRAND ASSET IMAGE</span>
+                      </label>
+                      {formPreviewImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setShowDeleteImageConfirm(true)}
+                          className="text-[9px] uppercase font-bold text-rose-400 hover:underline flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete Asset</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-[10px] text-neutral-400 leading-normal">
+                      Upload high-resolution logo artwork or brand identity asset (stored on Cloudinary).
+                    </p>
+
+                    {formPreviewImageUrl ? (
+                      <div className="space-y-3 bg-[#14141e] border border-[#26263a] rounded-lg p-3">
+                        <div className="relative w-full aspect-[16/9] bg-[#08080d] border border-[#202030] rounded overflow-hidden flex items-center justify-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={formPreviewImageUrl}
+                            alt="Logo Asset"
+                            style={{
+                              objectFit: formPreviewObjectFit,
+                              objectPosition: formPreviewObjectPosition,
+                            }}
+                            className="w-full h-full"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold tracking-wider text-neutral-400 mb-1">
+                              Image Fit Mode
+                            </label>
+                            <select
+                              value={formPreviewObjectFit}
+                              onChange={(e) => setFormPreviewObjectFit(e.target.value as "cover" | "contain")}
+                              className="w-full bg-[#181824] border border-[#2a2a3c] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
+                            >
+                              <option value="contain">Contain (Full logo visible)</option>
+                              <option value="cover">Cover (Fill 16:9 frame)</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold tracking-wider text-neutral-400 mb-1">
+                              Focal Position
+                            </label>
+                            <select
+                              value={formPreviewObjectPosition}
+                              onChange={(e) => setFormPreviewObjectPosition(e.target.value)}
+                              className="w-full bg-[#181824] border border-[#2a2a3c] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
+                            >
+                              <option value="center center">Center (Default)</option>
+                              <option value="center top">Top Center</option>
+                              <option value="center bottom">Bottom Center</option>
+                              <option value="left center">Left Center</option>
+                              <option value="right center">Right Center</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-[#1e1e2c]">
+                          <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Logo Asset Uploaded</span>
+                          </span>
+
+                          <label className="cursor-pointer bg-[#20202e] hover:bg-[#2a2a3e] border border-[#34344a] text-white font-bold text-[10px] uppercase px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors select-none">
+                            {uploadingPreviewImage ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin text-rose-500" />
+                                <span>Uploading... {previewImageProgress}%</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3 h-3 text-rose-400" />
+                                <span>Replace Asset</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleUploadAssetImage}
+                              disabled={uploadingPreviewImage}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer border-2 border-dashed border-[#28283a] hover:border-rose-500/60 bg-[#14141e] hover:bg-[#181824] p-4 rounded-md flex flex-col items-center justify-center text-center transition-all group">
+                        {uploadingPreviewImage ? (
+                          <div className="flex flex-col items-center gap-2">
+                            <Loader2 className="w-6 h-6 animate-spin text-rose-500" />
+                            <span className="text-xs font-bold text-white">Uploading Logo to Cloudinary... {previewImageProgress}%</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="w-9 h-9 rounded-full bg-rose-600/10 border border-rose-500/20 flex items-center justify-center text-rose-500 mb-2 group-hover:scale-110 transition-transform">
+                              <Upload className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-white uppercase tracking-wider">Upload Logo Asset</span>
+                            <span className="text-[10px] text-neutral-500 mt-1">PNG, SVG, WebP or JPG up to 10MB</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleUploadAssetImage}
+                          disabled={uploadingPreviewImage}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. GRAPHICS DESIGN PROJECT MEDIA */}
+              {isGraphicsCategory(formCategory) && !isLogoCategory(formCategory) && !isVideoCategory(formCategory) && !isWebsiteCategory(formCategory) && (
+                <div className="p-4 bg-[#121218] border border-[#222232] rounded-lg space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#1c1c28] pb-2.5">
+                    <h4 className="text-xs uppercase font-bold tracking-wider text-rose-500 flex items-center gap-2">
+                      <Palette className="w-4 h-4" />
+                      <span>GRAPHIC DESIGN MEDIA</span>
+                    </h4>
+                    <span className="text-[10px] text-neutral-500 font-medium">Cloudinary Graphic Asset</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-300 flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-rose-400" />
+                        <span>GRAPHIC CREATIVE IMAGE</span>
+                      </label>
+                      {formPreviewImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setShowDeleteImageConfirm(true)}
+                          className="text-[9px] uppercase font-bold text-rose-400 hover:underline flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete Asset</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-[10px] text-neutral-400 leading-normal">
+                      Upload graphic design artwork, poster, or banner image (stored on Cloudinary).
+                    </p>
+
+                    {formPreviewImageUrl ? (
+                      <div className="space-y-3 bg-[#14141e] border border-[#26263a] rounded-lg p-3">
+                        <div className="relative w-full aspect-[16/9] bg-[#08080d] border border-[#202030] rounded overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={formPreviewImageUrl}
+                            alt="Graphic Creative"
+                            style={{
+                              objectFit: formPreviewObjectFit,
+                              objectPosition: formPreviewObjectPosition,
+                            }}
+                            className="w-full h-full"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold tracking-wider text-neutral-400 mb-1">
+                              Image Fit Mode
+                            </label>
+                            <select
+                              value={formPreviewObjectFit}
+                              onChange={(e) => setFormPreviewObjectFit(e.target.value as "cover" | "contain")}
+                              className="w-full bg-[#181824] border border-[#2a2a3c] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
+                            >
+                              <option value="cover">Cover (Fill 16:9 frame)</option>
+                              <option value="contain">Contain (Show full artwork)</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold tracking-wider text-neutral-400 mb-1">
+                              Focal Position
+                            </label>
+                            <select
+                              value={formPreviewObjectPosition}
+                              onChange={(e) => setFormPreviewObjectPosition(e.target.value)}
+                              className="w-full bg-[#181824] border border-[#2a2a3c] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-semibold"
+                            >
+                              <option value="center center">Center (Default)</option>
+                              <option value="center top">Top Center</option>
+                              <option value="center bottom">Bottom Center</option>
+                              <option value="left center">Left Center</option>
+                              <option value="right center">Right Center</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-[#1e1e2c]">
+                          <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Graphic Asset Uploaded</span>
+                          </span>
+
+                          <label className="cursor-pointer bg-[#20202e] hover:bg-[#2a2a3e] border border-[#34344a] text-white font-bold text-[10px] uppercase px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors select-none">
+                            {uploadingPreviewImage ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin text-rose-500" />
+                                <span>Uploading... {previewImageProgress}%</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3 h-3 text-rose-400" />
+                                <span>Replace Image</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleUploadAssetImage}
+                              disabled={uploadingPreviewImage}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer border-2 border-dashed border-[#28283a] hover:border-rose-500/60 bg-[#14141e] hover:bg-[#181824] p-4 rounded-md flex flex-col items-center justify-center text-center transition-all group">
+                        {uploadingPreviewImage ? (
+                          <div className="flex flex-col items-center gap-2">
+                            <Loader2 className="w-6 h-6 animate-spin text-rose-500" />
+                            <span className="text-xs font-bold text-white">Uploading Graphic to Cloudinary... {previewImageProgress}%</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="w-9 h-9 rounded-full bg-rose-600/10 border border-rose-500/20 flex items-center justify-center text-rose-500 mb-2 group-hover:scale-110 transition-transform">
+                              <Upload className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-white uppercase tracking-wider">Upload Graphic Artwork</span>
+                            <span className="text-[10px] text-neutral-500 mt-1">JPG, PNG, WebP or SVG up to 10MB</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleUploadAssetImage}
+                          disabled={uploadingPreviewImage}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 mb-1.5">
@@ -843,7 +1343,7 @@ export default function AdminProjectsPage() {
                   rows={3}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  placeholder="Describe project details, technology used, strategy & outcome..."
+                  placeholder="Describe project details, strategy, tools & outcome..."
                   className="w-full bg-[#14141c] border border-[#242432] rounded px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500 resize-none leading-relaxed"
                 />
               </div>
@@ -863,7 +1363,7 @@ export default function AdminProjectsPage() {
 
               <div>
                 <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-400 mb-1.5">
-                  External Live Link / Website URL
+                  External Live Link / Project URL
                 </label>
                 <input
                   type="text"
@@ -884,7 +1384,7 @@ export default function AdminProjectsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={formSubmitting || uploadingImage || uploadingVideo || uploadingVideoPreview}
+                  disabled={formSubmitting || uploadingPreviewImage}
                   className="flex items-center justify-center space-x-2 bg-rose-600 hover:bg-rose-700 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-bold text-xs uppercase tracking-widest px-6 py-2.5 rounded shadow-lg shadow-rose-950/50 transition-all active:scale-[0.99]"
                 >
                   {formSubmitting ? (
@@ -898,6 +1398,77 @@ export default function AdminProjectsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Deleting Image */}
+      {showDeleteImageConfirm && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          onClick={() => setShowDeleteImageConfirm(false)}
+        >
+          <div 
+            className="bg-[#12121c] border border-[#28283a] rounded-lg p-6 max-w-sm w-full space-y-4 shadow-2xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-full bg-rose-600/10 border border-rose-500/20 flex items-center justify-center text-rose-500 mx-auto">
+              <Trash2 className="w-6 h-6 text-rose-500" />
+            </div>
+            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Delete Preview Image?</h4>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              This will remove the image from the project and delete the associated Cloudinary asset safely.
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteImageConfirm(false)}
+                className="px-4 py-2 text-xs font-bold uppercase text-neutral-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteImage}
+                className="px-4 py-2 text-xs font-bold uppercase bg-rose-600 hover:bg-rose-700 text-white rounded transition-colors"
+              >
+                Delete Image
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Quick Video Embed Test Modal */}
+      {testVideoModalUrl && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+          onClick={() => setTestVideoModalUrl(null)}
+        >
+          <div 
+            className="relative w-full max-w-3xl bg-[#0b0b10] border border-[#222234] rounded-xl overflow-hidden shadow-2xl p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-[#1c1c2a]">
+              <span className="text-xs uppercase font-bold text-white flex items-center gap-2">
+                <Play className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
+                <span>Google Drive Embedded Video Preview</span>
+              </span>
+              <button
+                onClick={() => setTestVideoModalUrl(null)}
+                className="w-7 h-7 rounded-full bg-[#181822] text-neutral-400 hover:text-white hover:bg-rose-600 flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="w-full aspect-video bg-black rounded overflow-hidden">
+              <iframe
+                src={testVideoModalUrl}
+                allow="autoplay"
+                allowFullScreen
+                className="w-full h-full border-0"
+              />
+            </div>
           </div>
         </div>
       )}

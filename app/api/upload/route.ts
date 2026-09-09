@@ -38,7 +38,12 @@ export async function POST(req: Request) {
       if (cRes.ok) {
         const data = await cRes.json();
         if (data.secure_url) {
-          return NextResponse.json({ success: true, url: data.secure_url, provider: "cloudinary" });
+          return NextResponse.json({ 
+            success: true, 
+            url: data.secure_url, 
+            publicId: data.public_id || "", 
+            provider: "cloudinary" 
+          });
         }
       } else {
         const errorData = await cRes.json().catch(() => ({}));

@@ -70,6 +70,64 @@
   will-change: transform;
 }
 
+/* Preloader Central Graphic Continuous Rotation */
+@keyframes loaderSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spinReverse {
+  from {
+    transform: rotate(360deg);
+  }
+
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.animate-loader-spin {
+  animation: loaderSpin 6s linear infinite;
+  will-change: transform;
+}
+
+.animate-spin-reverse {
+  animation: spinReverse 14s linear infinite;
+  will-change: transform;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-loader-spin,
+  .animate-spin-reverse,
+  .animate-shimmer {
+    animation: none !important;
+  }
+}
+
+/* Prevent body scrolling while loading */
+body.is-loading {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
 /* GPU Performance Acceleration */
 img, video {
   content-visibility: auto;

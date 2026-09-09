@@ -2,11 +2,32 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { ArrowRight, ExternalLink, X, Sparkles, Play, Monitor, Film, Palette, MessageSquare, Video as VideoIcon } from "lucide-react";
+import { 
+  ArrowRight, 
+  ExternalLink, 
+  X, 
+  Sparkles, 
+  Play, 
+  Monitor, 
+  Film, 
+  Palette, 
+  MessageSquare, 
+  Video as VideoIcon,
+  Layout
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { isVideoUrl, getEmbedVideoUrl } from "@/lib/media";
+import { 
+  isVideoUrl, 
+  getEmbedVideoUrl, 
+  getGoogleDriveEmbedUrl, 
+  extractGoogleDriveFileId,
+  isVideoCategory,
+  isWebsiteCategory,
+  isLogoCategory,
+  isGraphicsCategory
+} from "@/lib/media";
 
 export interface Project {
   id: string;
@@ -15,6 +36,13 @@ export interface Project {
   category: string;
   image: string;
   imagePath?: string;
+  previewImageUrl?: string;
+  previewImagePublicId?: string;
+  previewObjectFit?: "cover" | "contain";
+  previewObjectPosition?: string;
+  googleDriveUrl?: string;
+  googleDriveFileId?: string;
+  googleDriveEmbedUrl?: string;
   videoUrl?: string;
   videoPath?: string;
   videoPreviewUrl?: string;
@@ -28,13 +56,13 @@ interface SelectedProjectsSectionProps {
   onOpenContactService?: (serviceName: string) => void;
 }
 
-const CATEGORIES = ["ALL", "WEBSITES", "AI VIDEO ADS", "PRODUCT DEMOS", "LOGO DESIGN"];
+const CATEGORIES = ["ALL", "WEBSITES", "LOGO DESIGN", "GRAPHICS", "AI VIDEO ADS", "PRODUCT DEMOS"];
 
 export default function SelectedProjectsSection({ onOpenContactService }: SelectedProjectsSectionProps) {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectsList, setProjectsList] = useState<Project[]>([]);
   const [activeCategory, setActiveCategory] = useState("ALL");
-  const [previewTab, setPreviewTab] = useState<"media" | "live" | "details">("media");
+  const [previewTab, setPreviewTab] = useState<"video" | "image" | "details">("video");
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -49,8 +77,15 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
             num: d.num || "01",
             title: d.title || "",
             category: d.category || "",
-            image: d.image || "",
+            image: d.image || d.previewImageUrl || d.videoPreviewUrl || "",
             imagePath: d.imagePath || "",
+            previewImageUrl: d.previewImageUrl || d.image || d.videoPreviewUrl || "",
+            previewImagePublicId: d.previewImagePublicId || "",
+            previewObjectFit: d.previewObjectFit || "cover",
+            previewObjectPosition: d.previewObjectPosition || "center center",
+            googleDriveUrl: d.googleDriveUrl || "",
+            googleDriveFileId: d.googleDriveFileId || "",
+            googleDriveEmbedUrl: d.googleDriveEmbedUrl || "",
             videoUrl: d.videoUrl || "",
             videoPath: d.videoPath || "",
             videoPreviewUrl: d.videoPreviewUrl || "",
@@ -68,6 +103,17 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
     fetchProjects();
   }, []);
 
+  // Keyboard Escape listener to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedProject(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const matchCategory = (catStr: string, filterKey: string) => {
     const cat = (catStr || "").toUpperCase().trim();
     const key = filterKey.toUpperCase().trim();
@@ -75,14 +121,16 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
     if (key === "ALL") return true;
 
     const isLogo = cat.includes("LOGO") || cat.includes("BRAND") || cat.includes("IDENTITY");
+    const isGraphics = cat.includes("GRAPHIC") || cat.includes("CREATIVE") || cat.includes("POSTER") || cat.includes("BANNER");
     const isAiAd = cat.includes("AI") || cat.includes("AD") || cat.includes("REELS") || cat.includes("TIKTOK");
     const isDemo = cat.includes("PRODUCT") || cat.includes("DEMO") || cat.includes("EXPLAINER") || cat.includes("WALKTHROUGH");
 
     if (key === "WEBSITE" || key === "WEBSITES") {
       if (cat.includes("WEB") || cat.includes("SITE") || cat.includes("APP") || cat.includes("DEV") || cat.includes("STORE") || cat === "WEBSITE" || cat === "") return true;
-      return !isLogo && !isAiAd && !isDemo;
+      return !isLogo && !isGraphics && !isAiAd && !isDemo;
     }
     if (key === "LOGO DESIGN" || key === "LOGO") return isLogo;
+    if (key === "GRAPHICS" || key === "GRAPHIC DESIGN") return isGraphics;
     if (key === "AI VIDEO AD" || key === "AI VIDEO ADS" || key === "AI VIDEO") return isAiAd;
     if (key === "PRODUCT DEMO" || key === "PRODUCT DEMOS") return isDemo;
 
@@ -92,15 +140,36 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
   const filteredProjects = projectsList.filter((p) => matchCategory(p.category, activeCategory));
 
   const getCategoryIcon = (categoryStr: string) => {
-    const c = categoryStr.toUpperCase();
-    if (c.includes("AI") || c.includes("AD") || c.includes("VIDEO")) return VideoIcon;
-    if (c.includes("PRODUCT") || c.includes("DEMO")) return Film;
-    if (c.includes("LOGO") || c.includes("BRAND")) return Palette;
+    if (isVideoCategory(categoryStr)) return VideoIcon;
+    if (isLogoCategory(categoryStr)) return Palette;
+    if (isGraphicsCategory(categoryStr)) return Palette;
+    if (isWebsiteCategory(categoryStr)) return Layout;
     return Monitor;
   };
 
+  const getProjectEmbedUrl = (project: Project): string | null => {
+    if (!isVideoCategory(project.category)) return null;
+    if (project.googleDriveEmbedUrl) return project.googleDriveEmbedUrl;
+    if (project.googleDriveUrl) return getGoogleDriveEmbedUrl(project.googleDriveUrl);
+    if (project.googleDriveFileId) return `https://drive.google.com/file/d/${project.googleDriveFileId}/preview`;
+    if (project.videoUrl) {
+      if (project.videoUrl.includes("drive.google.com") || extractGoogleDriveFileId(project.videoUrl)) {
+        return getGoogleDriveEmbedUrl(project.videoUrl);
+      }
+      return getEmbedVideoUrl(project.videoUrl);
+    }
+    if (project.link && isVideoUrl(project.link)) {
+      return getEmbedVideoUrl(project.link);
+    }
+    return null;
+  };
+
+  const getProjectPreviewImage = (project: Project): string => {
+    return project.previewImageUrl || project.videoPreviewUrl || project.image || "";
+  };
+
   return (
-    <section id="projects" className="w-full py-16 px-6 md:px-12 border-b border-[#18181f] bg-[#060607]">
+    <section id="projects" className="w-full py-16 px-4 sm:px-6 md:px-12 border-b border-[#18181f] bg-[#060607]">
       <div className="max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 pb-4 border-b border-[#1a1a24] gap-4">
@@ -132,19 +201,18 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
           </div>
         </div>
 
-        {/* Projects Cards Grid */}
+        {/* Projects Cards Grid with 16:9 Aspect Ratio & Admin Fit/Position Options */}
         {filteredProjects.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {filteredProjects.map((project, index) => {
               const CatIcon = getCategoryIcon(project.category);
-              
-              // Determine Poster/Preview Image (videoPreviewUrl takes precedence, fallback to image)
-              const posterImage = project.videoPreviewUrl || project.image;
+              const posterImage = getProjectPreviewImage(project);
               const hasPoster = posterImage && posterImage.trim().length > 0;
-
-              // Determine if project has playable Video asset
-              const activeVideoUrl = project.videoUrl || (isVideoUrl(project.link) ? project.link : "");
-              const hasVideo = !!activeVideoUrl;
+              const isVideoType = isVideoCategory(project.category);
+              const embedUrl = getProjectEmbedUrl(project);
+              const hasVideo = isVideoType && !!embedUrl;
+              const objectFit = project.previewObjectFit || "cover";
+              const objectPosition = project.previewObjectPosition || "center center";
 
               return (
                 <motion.div
@@ -152,15 +220,15 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: index * 0.12 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
                   onClick={() => {
                     setSelectedProject(project);
-                    setPreviewTab(hasVideo ? "live" : "media");
+                    setPreviewTab(hasVideo ? "video" : "image");
                   }}
                   className="group cursor-pointer flex flex-col bg-[#0b0b0e] border border-[#1a1a24] rounded-lg overflow-hidden hover:border-rose-600/50 transition-all duration-300 hover:shadow-xl hover:shadow-rose-950/20"
                 >
-                  {/* Project Card Preview Poster (Lightweight Image - No Heavy Video Downloads on Card Render) */}
-                  <div className="relative w-full aspect-[16/10] overflow-hidden bg-[#111116] border-b border-[#14141c]">
+                  {/* Project Card Preview Image (Consistent 16:9 Aspect Ratio Container) */}
+                  <div className="relative w-full aspect-[16/9] overflow-hidden bg-[#09090e] border-b border-[#14141c]">
                     {hasPoster ? (
                       <Image
                         src={posterImage}
@@ -170,7 +238,11 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
                         loading="lazy"
                         decoding="async"
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
-                        className="object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
+                        style={{
+                          objectFit: objectFit as any,
+                          objectPosition: objectPosition,
+                        }}
+                        className="transition-transform duration-500 ease-out group-hover:scale-105"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#141420] via-[#0d0d14] to-[#08080c] p-6 text-center">
@@ -190,7 +262,7 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
                       <span>{project.category}</span>
                     </div>
 
-                    {/* Video Indicator Overlay */}
+                    {/* Play Video Button Overlay ONLY for Video Projects */}
                     {hasVideo && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition-colors">
                         <div className="w-12 h-12 rounded-full bg-rose-600/90 border border-white/30 flex items-center justify-center text-white shadow-xl group-hover:scale-110 transition-transform">
@@ -213,7 +285,13 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
                           {project.title}
                         </h3>
                         <p className="text-[10px] tracking-widest text-neutral-400 font-medium uppercase">
-                          {hasVideo ? "Click to play video ✦" : "Click to view project ✦"}
+                          {hasVideo 
+                            ? "Watch Video ✦" 
+                            : isWebsiteCategory(project.category) 
+                            ? "View Website ✦" 
+                            : isLogoCategory(project.category)
+                            ? "View Brand Asset ✦"
+                            : "View Details ✦"}
                         </p>
                       </div>
                     </div>
@@ -235,188 +313,183 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
         )}
       </div>
 
-      {/* Interactive Project Preview Modal */}
+      {/* Service-Specific Project Modal */}
       <AnimatePresence>
-        {selectedProject && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-4xl bg-[#0e0e14] border border-[#242436] rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+        {selectedProject && (() => {
+          const isVideoType = isVideoCategory(selectedProject.category);
+          const isWebsiteType = isWebsiteCategory(selectedProject.category);
+          const embedUrl = getProjectEmbedUrl(selectedProject);
+          const assetImage = getProjectPreviewImage(selectedProject);
+          const objectFit = selectedProject.previewObjectFit || "cover";
+          const objectPosition = selectedProject.previewObjectPosition || "center center";
+
+          return (
+            <div 
+              className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md overflow-x-hidden"
+              onClick={() => setSelectedProject(null)}
             >
-              {/* Modal Header Bar */}
-              <div className="px-6 py-4 border-b border-[#1c1c28] bg-[#0b0b0f] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="font-condensed text-2xl font-black text-rose-500">
-                    {selectedProject.num}
-                  </span>
-                  <div>
-                    <h3 className="font-condensed text-xl font-extrabold uppercase text-white tracking-wide">
-                      {selectedProject.title}
-                    </h3>
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-rose-400">
-                      {selectedProject.category}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-[95vw] max-w-4xl bg-[#0e0e14] border border-[#242436] rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] my-auto"
+              >
+                {/* Modal Header Bar */}
+                <div className="px-5 py-3.5 border-b border-[#1c1c28] bg-[#0b0b0f] flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="font-condensed text-2xl font-black text-rose-500">
+                      {selectedProject.num}
                     </span>
+                    <div>
+                      <h3 className="font-condensed text-lg sm:text-xl font-extrabold uppercase text-white tracking-wide line-clamp-1">
+                        {selectedProject.title}
+                      </h3>
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-rose-400">
+                        {selectedProject.category}
+                      </span>
+                    </div>
                   </div>
+
+                  <button
+                    onClick={() => setSelectedProject(null)}
+                    aria-label="Close modal"
+                    className="w-8 h-8 rounded-full bg-[#181822] border border-[#2a2a38] flex items-center justify-center text-neutral-400 hover:text-white hover:bg-rose-600 transition-colors shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => setSelectedProject(null)}
-                  className="w-8 h-8 rounded-full bg-[#181822] border border-[#2a2a38] flex items-center justify-center text-neutral-400 hover:text-white hover:bg-rose-600 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+                {/* Modal Viewport Switcher Tabs (Only if Video or multiple views exist) */}
+                {isVideoType && embedUrl && (
+                  <div className="flex items-center gap-2 px-5 py-2 bg-[#12121c] border-b border-[#1e1e2c] text-xs overflow-x-auto">
+                    <button
+                      onClick={() => setPreviewTab("video")}
+                      className={`px-3 py-1.5 rounded-md font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                        previewTab === "video"
+                          ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
+                          : "text-neutral-400 hover:text-white bg-[#181824]"
+                      }`}
+                    >
+                      <Play className="w-3 h-3 fill-current" />
+                      <span>Watch Video</span>
+                    </button>
 
-              {/* Preview Mode Switcher Tabs */}
-              <div className="flex items-center gap-2 px-6 py-2.5 bg-[#12121c] border-b border-[#1e1e2c] text-xs">
-                {(selectedProject.videoPreviewUrl || selectedProject.image) && (
-                  <button
-                    onClick={() => setPreviewTab("media")}
-                    className={`px-3 py-1.5 rounded-md font-bold uppercase tracking-wider transition-all ${
-                      previewTab === "media"
-                        ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
-                        : "text-neutral-400 hover:text-white bg-[#181824]"
-                    }`}
-                  >
-                    📷 Poster / Cover
-                  </button>
+                    {assetImage && (
+                      <button
+                        onClick={() => setPreviewTab("image")}
+                        className={`px-3 py-1.5 rounded-md font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                          previewTab === "image"
+                            ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
+                            : "text-neutral-400 hover:text-white bg-[#181824]"
+                        }`}
+                      >
+                        📷 Preview Poster
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => setPreviewTab("details")}
+                      className={`px-3 py-1.5 rounded-md font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                        previewTab === "details"
+                          ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
+                          : "text-neutral-400 hover:text-white bg-[#181824]"
+                      }`}
+                    >
+                      📋 Overview &amp; Tech
+                    </button>
+                  </div>
                 )}
 
-                {(selectedProject.videoUrl || (selectedProject.link && selectedProject.link !== "#")) && (
-                  <button
-                    onClick={() => setPreviewTab("live")}
-                    className={`px-3 py-1.5 rounded-md font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
-                      previewTab === "live"
-                        ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
-                        : "text-neutral-400 hover:text-white bg-[#181824]"
-                    }`}
-                  >
-                    <Play className="w-3 h-3 fill-current" />
-                    <span>Watch Video / Live Preview</span>
-                  </button>
-                )}
-
-                <button
-                  onClick={() => setPreviewTab("details")}
-                  className={`px-3 py-1.5 rounded-md font-bold uppercase tracking-wider transition-all ${
-                    previewTab === "details"
-                      ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
-                      : "text-neutral-400 hover:text-white bg-[#181824]"
-                  }`}
-                >
-                  📋 Overview &amp; Tech Stack
-                </button>
-              </div>
-
-              {/* Preview Content Area */}
-              <div className="relative flex-1 w-full min-h-[340px] max-h-[500px] bg-[#060608] overflow-hidden flex items-center justify-center">
-                {previewTab === "live" ? (
-                  selectedProject.videoUrl ? (
-                    <video
-                      src={selectedProject.videoUrl}
-                      poster={selectedProject.videoPreviewUrl || selectedProject.image}
-                      controls
-                      autoPlay
-                      className="w-full h-full max-h-[460px] object-contain mx-auto"
-                    />
-                  ) : isVideoUrl(selectedProject.link) ? (
-                    selectedProject.link.includes("youtube.com") || selectedProject.link.includes("vimeo.com") || selectedProject.link.includes("youtu.be") ? (
+                {/* Media Showcase Viewport */}
+                <div className="relative flex-1 w-full bg-[#060608] overflow-hidden flex items-center justify-center min-h-[260px] sm:min-h-[360px] max-h-[520px]">
+                  {isVideoType && previewTab === "video" && embedUrl ? (
+                    /* Google Drive Responsive Iframe Player (Loaded ONLY when clicked) */
+                    <div className="w-full h-full aspect-video max-h-[500px] flex items-center justify-center relative bg-black">
                       <iframe
-                        src={getEmbedVideoUrl(selectedProject.link)}
+                        src={embedUrl}
                         title={selectedProject.title}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allow="autoplay; encrypted-media; picture-in-picture"
                         allowFullScreen
-                        className="w-full h-full min-h-[360px] border-0"
-                      />
-                    ) : (
-                      <video
-                        src={selectedProject.link}
-                        controls
-                        autoPlay
-                        className="w-full h-full max-h-[460px] object-contain mx-auto"
-                      />
-                    )
-                  ) : selectedProject.link && selectedProject.link !== "#" ? (
-                    <div className="w-full h-full min-h-[360px] relative">
-                      <iframe
-                        src={selectedProject.link}
-                        title={selectedProject.title}
-                        className="w-full h-full border-0 bg-white"
-                        sandbox="allow-scripts allow-same-origin"
+                        className="w-full h-full border-0"
                       />
                     </div>
-                  ) : null
-                ) : previewTab === "media" && (selectedProject.videoPreviewUrl || selectedProject.image) ? (
-                  <div className="relative w-full h-full min-h-[360px]">
-                    <Image
-                      src={selectedProject.videoPreviewUrl || selectedProject.image}
-                      alt={selectedProject.title}
-                      fill
-                      unoptimized
-                      className="object-contain p-4"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-full h-full min-h-[360px] flex flex-col items-center justify-center p-8 bg-gradient-to-br from-[#181826] via-[#101018] to-[#08080d] text-center">
-                    <Sparkles className="w-12 h-12 text-rose-500 mb-4 animate-pulse" />
-                    <h3 className="font-condensed text-3xl font-extrabold text-white uppercase tracking-wider mb-2">
-                      {selectedProject.title}
-                    </h3>
-                    <p className="text-rose-400 text-xs font-bold uppercase tracking-widest mb-4">
-                      {selectedProject.category}
-                    </p>
-                    <p className="text-neutral-300 text-xs max-w-lg leading-relaxed font-light">
-                      {selectedProject.description}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Modal Description & Action Footer */}
-              <div className="p-6 bg-[#0e0e14] border-t border-[#1c1c28] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {selectedProject.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-[10px] font-semibold text-neutral-300 bg-[#161622] border border-[#262638] px-2.5 py-1 rounded uppercase tracking-wider"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  {onOpenContactService && (
-                    <button
-                      onClick={() => {
-                        onOpenContactService(selectedProject.category || selectedProject.title);
-                        setSelectedProject(null);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 text-xs uppercase font-bold text-neutral-300 bg-[#1a1a26] hover:bg-neutral-800 border border-[#28283a] rounded transition-all"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Inquire Service</span>
-                    </button>
-                  )}
-
-                  {selectedProject.link && selectedProject.link !== "#" && (
-                    <a
-                      href={selectedProject.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-5 py-2 text-xs uppercase font-bold text-white bg-rose-600 hover:bg-rose-700 rounded shadow-lg shadow-rose-950/50 transition-all active:scale-95"
-                    >
-                      <span>Open External Link</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                  ) : assetImage && (previewTab === "image" || !isVideoType) ? (
+                    /* Website / Logo / Graphics Image Asset Display with Admin Fit/Position Settings */
+                    <div className="relative w-full h-full min-h-[300px]">
+                      <Image
+                        src={assetImage}
+                        alt={selectedProject.title}
+                        fill
+                        unoptimized
+                        style={{
+                          objectFit: objectFit as any,
+                          objectPosition: objectPosition,
+                        }}
+                        className="p-2"
+                      />
+                    </div>
+                  ) : (
+                    /* Project Details / Overview View */
+                    <div className="w-full h-full min-h-[300px] flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#181826] via-[#101018] to-[#08080d] text-center">
+                      <Sparkles className="w-10 h-10 text-rose-500 mb-3 animate-pulse" />
+                      <h3 className="font-condensed text-2xl font-extrabold text-white uppercase tracking-wider mb-2">
+                        {selectedProject.title}
+                      </h3>
+                      <p className="text-rose-400 text-xs font-bold uppercase tracking-widest mb-3">
+                        {selectedProject.category}
+                      </p>
+                      <p className="text-neutral-300 text-xs max-w-lg leading-relaxed font-light">
+                        {selectedProject.description}
+                      </p>
+                    </div>
                   )}
                 </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
+
+                {/* Modal Footer & Actions */}
+                <div className="p-4 sm:p-5 bg-[#0e0e14] border-t border-[#1c1c28] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {selectedProject.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-[9px] font-semibold text-neutral-300 bg-[#161622] border border-[#262638] px-2 py-0.5 rounded uppercase tracking-wider"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    {onOpenContactService && (
+                      <button
+                        onClick={() => {
+                          onOpenContactService(selectedProject.category || selectedProject.title);
+                          setSelectedProject(null);
+                        }}
+                        className="flex items-center gap-2 px-3.5 py-2 text-xs uppercase font-bold text-neutral-300 bg-[#1a1a26] hover:bg-neutral-800 border border-[#28283a] rounded transition-all"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Inquire Service</span>
+                      </button>
+                    )}
+
+                    {selectedProject.link && selectedProject.link !== "#" && (
+                      <a
+                        href={selectedProject.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2 text-xs uppercase font-bold text-white bg-rose-600 hover:bg-rose-700 rounded shadow-lg shadow-rose-950/50 transition-all active:scale-95"
+                      >
+                        <span>{isWebsiteType ? "Visit Live Site" : "Open Link"}</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
     </section>
   );
