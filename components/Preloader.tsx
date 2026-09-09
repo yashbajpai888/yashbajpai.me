@@ -150,9 +150,9 @@ export default function Preloader() {
         <div className="relative z-20 flex items-center justify-between px-6 md:px-12 pt-6 text-[10px] md:text-xs font-mono uppercase tracking-[0.2em] text-neutral-400">
           <div className="flex items-center space-x-2">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e] animate-ping" />
-            <span className="font-bold text-white tracking-widest">YASH BAJPAI</span>
-            <span className="text-neutral-600">//</span>
-            <span className="text-rose-400 font-semibold">DIGITAL MARKETING</span>
+            <span className="font-bold text-rose-500 tracking-widest">YASH BAJPAI</span>
+            <span className="text-rose-600/70">//</span>
+            <span className="text-rose-500 font-semibold">DIGITAL MARKETING</span>
           </div>
           <div className="hidden sm:flex items-center space-x-2 text-neutral-400">
             <span className="text-rose-500 font-bold">SYSTEM INITIALIZATION</span>
