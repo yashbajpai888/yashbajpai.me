@@ -38,12 +38,12 @@ export default function Preloader() {
 
     window.addEventListener("load", handleLoad);
 
-    // Fallback safety timeout (max 6s) so preloader never hangs indefinitely
+    // Fallback safety timeout (max 3s) so preloader never hangs
     const safetyTimeout = setTimeout(() => {
       isWindowLoadedRef.current = true;
-    }, 6000);
+    }, 2500);
 
-    const MINIMUM_LOAD_TIME = 3000; // Exact 3s minimum experience
+    const MINIMUM_LOAD_TIME = 800; // Snappy, premium 800ms minimum experience
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTimeRef.current;
@@ -57,33 +57,26 @@ export default function Preloader() {
         }
 
         if (!isReady) {
-          // Calculate paced progress across the 3000ms minimum window
+          // Smooth, paced progress across the window
           let target = 1;
-          if (elapsed < 1000) {
-            // 0 - 1s: 1 -> 25%
-            target = 1 + (elapsed / 1000) * 24;
-          } else if (elapsed < 2000) {
-            // 1 - 2s: 25 -> 60%
-            target = 25 + ((elapsed - 1000) / 1000) * 35;
-          } else if (elapsed < 2700) {
-            // 2 - 2.7s: 60 -> 90%
-            target = 60 + ((elapsed - 2000) / 700) * 30;
+          if (elapsed < 300) {
+            target = 1 + (elapsed / 300) * 35;
+          } else if (elapsed < 600) {
+            target = 35 + ((elapsed - 300) / 300) * 35;
           } else {
-            // 2.7 - 3s: 90 -> 97%
-            target = 90 + ((elapsed - 2700) / 300) * 7;
+            target = 70 + ((elapsed - 600) / 400) * 25;
           }
 
-          // Cap simulated progress at 97% until both minimum 3s & window load are fulfilled
-          const nextVal = Math.min(97, Math.max(prev + 0.4, target));
+          const nextVal = Math.min(96, Math.max(prev + 1.2, target));
           return nextVal;
         } else {
-          // Both conditions met: swiftly advance to 100%
-          const step = Math.max(1.5, (100 - prev) / 2.5);
+          // When ready, smoothly accelerate to 100%
+          const step = Math.max(4, (100 - prev) / 1.8);
           const next = prev + step;
           return next >= 100 ? 100 : next;
         }
       });
-    }, 25);
+    }, 40);
 
     return () => {
       window.removeEventListener("load", handleLoad);
@@ -235,6 +228,9 @@ export default function Preloader() {
           <img
             src="/assets/loader.png"
             alt="Loading Experience"
+            width={176}
+            height={176}
+            decoding="async"
             className="site-loader__graphic animate-loader-spin w-20 sm:w-32 md:w-40 lg:w-44 h-auto object-contain drop-shadow-[0_0_25px_rgba(225,29,72,0.25)] relative z-10"
           />
         </div>

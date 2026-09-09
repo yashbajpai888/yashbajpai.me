@@ -1,13 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
+import dynamic from "next/dynamic";
 import NavbarHeader from "@/components/NavbarHeader";
 import HeroSection from "@/components/HeroSection";
 import ServicesSection from "@/components/ServicesSection";
 import SelectedProjectsSection from "@/components/SelectedProjectsSection";
 import EducationSkillsProcessSection from "@/components/EducationSkillsProcessSection";
 import ContactFooterSection from "@/components/ContactFooterSection";
-import ContactModal from "@/components/ContactModal";
+
+const ContactModal = dynamic(() => import("@/components/ContactModal"), {
+  ssr: false,
+});
 
 export default function Home() {
   const [isContactOpen, setIsContactOpen] = useState(false);

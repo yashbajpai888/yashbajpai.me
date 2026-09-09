@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Oswald, Caveat } from "next/font/google";
 import "./globals.css";
 import Preloader from "@/components/Preloader";
+import SmoothScroll from "@/components/SmoothScroll";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -52,7 +53,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${oswald.variable} ${caveat.variable} dark`}>
       <body suppressHydrationWarning className="bg-[#060607] text-white antialiased selection:bg-rose-600 selection:text-white min-h-screen">
         <Preloader />
-        {children}
+        <SmoothScroll>{children}</SmoothScroll>
       </body>
     </html>
   );

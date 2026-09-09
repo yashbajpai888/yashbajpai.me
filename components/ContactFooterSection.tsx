@@ -158,6 +158,10 @@ export default function ContactFooterSection({ onOpenContact }: ContactFooterSec
               <img
                 src={workspaceImage}
                 alt="Workspace Setup"
+                width={320}
+                height={240}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />
             ) : (
