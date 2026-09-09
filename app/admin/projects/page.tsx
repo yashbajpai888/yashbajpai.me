@@ -305,6 +305,11 @@ export default function AdminProjectsPage() {
       return;
     }
 
+    if (formPreviewImageUrl && formPreviewImageUrl.startsWith("data:") && formPreviewImageUrl.length > 50000) {
+      alert("Image is in raw base64 format which exceeds Firestore's 1MB document limit. Please use the Upload button to upload the image file to Cloudinary or Firebase Storage.");
+      return;
+    }
+
     setFormSubmitting(true);
 
     const parsedTags = formTags

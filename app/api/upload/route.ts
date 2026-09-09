@@ -51,22 +51,10 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Fallback: Convert file buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString("base64");
-    const mimeType = file.type || "application/octet-stream";
-    const dataUrl = `data:${mimeType};base64,${base64}`;
-
-    // Return dataUrl if under 900KB so it safely fits Firestore
-    if (dataUrl.length < 900000) {
-      return NextResponse.json({ success: true, url: dataUrl, provider: "base64" });
-    }
-
     return NextResponse.json(
       {
         error:
-          "File is too large (>900KB) and Cloudinary upload failed. Please configure NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET in your environment variables.",
+          "Cloudinary credentials not configured or upload failed. Falling back to Firebase Storage.",
       },
       { status: 400 }
     );
