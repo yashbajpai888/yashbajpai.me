@@ -153,4 +153,89 @@ export function isGraphicsCategory(categoryStr?: string): boolean {
   );
 }
 
+/**
+ * Validates and cleanses Firestore document payloads to guarantee:
+ * 1. No base64 strings (data:...) or data URLs are stored.
+ * 2. No File/Blob objects exist.
+ * 3. Serialized payload size is safely under 50KB (well below Firestore's 1MB limit).
+ */
+export function validateAndSanitizeFirestorePayload<T extends Record<string, any>>(
+  payload: T,
+  maxSizeBytes = 50 * 1024
+): { sanitized: T; sizeBytes: number; valid: boolean; error?: string } {
+  const sanitized: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(payload)) {
+    // Check if value is a raw File or Blob
+    if (typeof value === "object" && value !== null) {
+      if (
+        typeof (value as any).arrayBuffer === "function" ||
+        (typeof File !== "undefined" && value instanceof File) ||
+        (typeof Blob !== "undefined" && value instanceof Blob)
+      ) {
+        return {
+          sanitized: payload,
+          sizeBytes: 0,
+          valid: false,
+          error: `Field "${key}" contains raw File/Blob data. Upload file to Storage first and store only the URL in Firestore.`,
+        };
+      }
+    }
+
+    // Check if value is a string containing base64 data URL
+    if (typeof value === "string") {
+      if (value.startsWith("data:") && (value.includes(";base64,") || value.length > 500)) {
+        return {
+          sanitized: payload,
+          sizeBytes: value.length,
+          valid: false,
+          error: `Field "${key}" contains base64/data-URL media (${(value.length / 1024).toFixed(1)} KB). Media files must be uploaded to Firebase Storage or Cloudinary instead of storing inline data in Firestore.`,
+        };
+      }
+      sanitized[key] = value;
+    } else if (Array.isArray(value)) {
+      const cleanArray = [];
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (typeof item === "string" && item.startsWith("data:") && item.includes(";base64,")) {
+          return {
+            sanitized: payload,
+            sizeBytes: item.length,
+            valid: false,
+            error: `Field "${key}[${i}]" contains base64/data-URL media.`,
+          };
+        }
+        cleanArray.push(item);
+      }
+      sanitized[key] = cleanArray;
+    } else {
+      sanitized[key] = value;
+    }
+  }
+
+  // Calculate serialized JSON payload size
+  let sizeBytes = 0;
+  try {
+    const jsonStr = JSON.stringify(sanitized);
+    sizeBytes = new TextEncoder().encode(jsonStr).length;
+  } catch (e) {
+    sizeBytes = 1000;
+  }
+
+  if (sizeBytes > maxSizeBytes) {
+    return {
+      sanitized: sanitized as T,
+      sizeBytes,
+      valid: false,
+      error: `Document payload size (${(sizeBytes / 1024).toFixed(1)} KB) exceeds safe limit of ${(maxSizeBytes / 1024).toFixed(0)} KB.`,
+    };
+  }
+
+  return {
+    sanitized: sanitized as T,
+    sizeBytes,
+    valid: true,
+  };
+}
+
 

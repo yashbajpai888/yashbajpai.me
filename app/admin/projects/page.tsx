@@ -21,7 +21,8 @@ import {
   isVideoCategory,
   isWebsiteCategory,
   isLogoCategory,
-  isGraphicsCategory
+  isGraphicsCategory,
+  validateAndSanitizeFirestorePayload
 } from "@/lib/media";
 import { 
   FolderGit, 
@@ -265,13 +266,20 @@ export default function AdminProjectsPage() {
     setFormTitle(project.title);
     setFormCategory(project.category);
 
-    const existingImage = project.previewImageUrl || project.videoPreviewUrl || project.image || "";
-    setFormPreviewImageUrl(existingImage);
+    const rawImage = project.previewImageUrl || project.videoPreviewUrl || project.image || "";
+    // Detect if existing document contains legacy oversized base64 data and filter it out safely
+    let sanitizedImage = rawImage;
+    if (rawImage.startsWith("data:") && (rawImage.includes(";base64,") || rawImage.length > 500)) {
+      sanitizedImage = "";
+      setMediaError("Notice: Previous preview was stored as legacy base64 data. Please upload a new image to store it in cloud storage.");
+    }
+
+    setFormPreviewImageUrl(sanitizedImage);
     setFormPreviewImagePublicId(project.previewImagePublicId || "");
     setFormPreviewObjectFit(project.previewObjectFit || "cover");
     setFormPreviewObjectPosition(project.previewObjectPosition || "center center");
-    setPreviewImageFileName(existingImage ? "Asset Loaded" : "");
-    setPreviewImageProvider(existingImage.includes("cloudinary") ? "cloudinary" : "");
+    setPreviewImageFileName(sanitizedImage ? "Asset Loaded" : "");
+    setPreviewImageProvider(sanitizedImage.includes("cloudinary") ? "cloudinary" : sanitizedImage ? "storage" : "");
 
     const existingDriveUrl = project.googleDriveUrl || (project.videoUrl && project.videoUrl.includes("drive.google.com") ? project.videoUrl : "");
     setFormGoogleDriveUrl(existingDriveUrl);
@@ -305,8 +313,9 @@ export default function AdminProjectsPage() {
       return;
     }
 
-    if (formPreviewImageUrl && formPreviewImageUrl.startsWith("data:") && formPreviewImageUrl.length > 50000) {
-      alert("Image is in raw base64 format which exceeds Firestore's 1MB document limit. Please use the Upload button to upload the image file to Cloudinary or Firebase Storage.");
+    // Ensure no raw base64 data URL is submitted
+    if (formPreviewImageUrl && formPreviewImageUrl.startsWith("data:")) {
+      alert("Image is in raw base64 format which exceeds Firestore limits. Please click Upload to store the image in cloud storage.");
       return;
     }
 
@@ -320,35 +329,50 @@ export default function AdminProjectsPage() {
     const extractedFileId = isVideoType ? (extractGoogleDriveFileId(formGoogleDriveUrl) || "") : "";
     const calculatedEmbedUrl = extractedFileId ? `https://drive.google.com/file/d/${extractedFileId}/preview` : "";
 
+    // Sanitize image url: ensure no base64 string is ever passed
+    const cleanImageUrl = formPreviewImageUrl && !formPreviewImageUrl.startsWith("data:") ? formPreviewImageUrl.trim() : "";
+
+    // Explicit, lightweight Firestore metadata payload
     const projectPayload = {
-      num: formNum,
+      num: formNum.trim() || "01",
       title: formTitle.trim(),
       category: formCategory.trim(),
-      image: formPreviewImageUrl,
-      previewImageUrl: formPreviewImageUrl,
-      previewImagePublicId: formPreviewImagePublicId,
+      image: cleanImageUrl,
+      imagePath: formPreviewImagePublicId || "",
+      previewImageUrl: cleanImageUrl,
+      previewImagePublicId: formPreviewImagePublicId || "",
       previewObjectFit: formPreviewObjectFit || "cover",
       previewObjectPosition: formPreviewObjectPosition || "center center",
       googleDriveUrl: isVideoType ? formGoogleDriveUrl.trim() : "",
       googleDriveFileId: extractedFileId,
       googleDriveEmbedUrl: calculatedEmbedUrl,
-      // Backward compatibility fields for legacy views:
-      videoUrl: isVideoType ? (calculatedEmbedUrl || editingProject?.videoUrl || "") : "",
-      videoPreviewUrl: formPreviewImageUrl || editingProject?.videoPreviewUrl || "",
-      description: formDescription,
+      videoUrl: isVideoType ? (calculatedEmbedUrl || (editingProject?.videoUrl && !editingProject.videoUrl.startsWith("data:") ? editingProject.videoUrl : "")) : "",
+      videoPath: editingProject?.videoPath || "",
+      videoPreviewUrl: isVideoType ? cleanImageUrl : "",
+      videoPreviewPath: isVideoType ? (formPreviewImagePublicId || "") : "",
+      description: formDescription.trim(),
       tags: parsedTags,
-      link: formLink || "#",
+      link: formLink.trim() || "#",
       updatedAt: Timestamp.now()
     };
+
+    // Pre-flight validation: verifies zero base64 data and payload size is safely under 50KB
+    const validation = validateAndSanitizeFirestorePayload(projectPayload);
+    if (!validation.valid) {
+      alert(`Cannot save project: ${validation.error}`);
+      setMediaError(validation.error || "Invalid payload size");
+      setFormSubmitting(false);
+      return;
+    }
 
     try {
       if (editingProject) {
         const docRef = doc(db, "projects", editingProject.id);
-        await updateDoc(docRef, projectPayload);
+        await updateDoc(docRef, validation.sanitized);
         alert("Project updated successfully!");
       } else {
         await addDoc(collection(db, "projects"), {
-          ...projectPayload,
+          ...validation.sanitized,
           createdAt: Timestamp.now()
         });
         alert("Project added successfully!");
