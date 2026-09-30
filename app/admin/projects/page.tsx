@@ -1471,31 +1471,33 @@ export default function AdminProjectsPage() {
       {/* Admin Quick Video Embed Test Modal */}
       {testVideoModalUrl && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+          data-lenis-prevent
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md overflow-y-auto overscroll-contain"
           onClick={() => setTestVideoModalUrl(null)}
         >
           <div 
-            className="relative w-full max-w-3xl bg-[#0b0b10] border border-[#222234] rounded-xl overflow-hidden shadow-2xl p-4 space-y-3"
+            data-lenis-prevent
+            className="relative w-full max-w-3xl bg-[#0b0b10] border border-[#222234] rounded-xl overflow-hidden shadow-2xl p-3 sm:p-4 space-y-3 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-2 border-b border-[#1c1c2a]">
-              <span className="text-xs uppercase font-bold text-white flex items-center gap-2">
-                <Play className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
-                <span>Google Drive Embedded Video Preview</span>
+              <span className="text-xs uppercase font-bold text-white flex items-center gap-2 truncate min-w-0">
+                <Play className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" />
+                <span className="truncate">Google Drive Video Preview</span>
               </span>
               <button
                 onClick={() => setTestVideoModalUrl(null)}
-                className="w-7 h-7 rounded-full bg-[#181822] text-neutral-400 hover:text-white hover:bg-rose-600 flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded-full bg-[#181822] text-neutral-400 hover:text-white hover:bg-rose-600 flex items-center justify-center transition-colors shrink-0 ml-2"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="w-full aspect-video bg-black rounded overflow-hidden">
+            <div className="w-full aspect-video max-h-[60vh] bg-black rounded overflow-hidden relative">
               <iframe
                 src={testVideoModalUrl}
-                allow="autoplay"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
-                className="w-full h-full border-0"
+                className="w-full h-full border-0 absolute inset-0 pointer-events-auto"
               />
             </div>
           </div>

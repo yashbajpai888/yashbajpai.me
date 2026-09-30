@@ -18,6 +18,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import CustomVideoPlayer from "@/components/CustomVideoPlayer";
 import { 
   isVideoUrl, 
   getEmbedVideoUrl, 
@@ -113,6 +114,26 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Lock body scroll and pause Lenis smooth scroll while modal is open
+  useEffect(() => {
+    if (selectedProject) {
+      const originalOverflow = document.body.style.overflow;
+      const originalTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = "hidden";
+      document.body.style.touchAction = "none";
+      if (typeof window !== "undefined" && (window as any).lenis) {
+        (window as any).lenis.stop();
+      }
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.touchAction = originalTouchAction;
+        if (typeof window !== "undefined" && (window as any).lenis) {
+          (window as any).lenis.start();
+        }
+      };
+    }
+  }, [selectedProject]);
 
   const matchCategory = (catStr: string, filterKey: string) => {
     const cat = (catStr || "").toUpperCase().trim();
@@ -325,27 +346,29 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
 
           return (
             <div 
-              className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md overflow-x-hidden"
+              data-lenis-prevent
+              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-md overflow-y-auto overscroll-contain"
               onClick={() => setSelectedProject(null)}
             >
               <motion.div
+                data-lenis-prevent
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 onClick={(e) => e.stopPropagation()}
-                className="relative w-[95vw] max-w-4xl bg-[#0e0e14] border border-[#242436] rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] my-auto"
+                className="relative w-full max-w-4xl bg-[#0e0e14] border border-[#242436] rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[92vh] my-auto shrink-0"
               >
                 {/* Modal Header Bar */}
-                <div className="px-5 py-3.5 border-b border-[#1c1c28] bg-[#0b0b0f] flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="font-condensed text-2xl font-black text-rose-500">
+                <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-[#1c1c28] bg-[#0b0b0f] flex items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                    <span className="font-condensed text-xl sm:text-2xl font-black text-rose-500 shrink-0">
                       {selectedProject.num}
                     </span>
-                    <div>
-                      <h3 className="font-condensed text-lg sm:text-xl font-extrabold uppercase text-white tracking-wide line-clamp-1">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-condensed text-base sm:text-xl font-extrabold uppercase text-white tracking-wide truncate">
                         {selectedProject.title}
                       </h3>
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-rose-400">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-rose-400 block truncate">
                         {selectedProject.category}
                       </span>
                     </div>
@@ -354,69 +377,24 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
                   <button
                     onClick={() => setSelectedProject(null)}
                     aria-label="Close modal"
-                    className="w-8 h-8 rounded-full bg-[#181822] border border-[#2a2a38] flex items-center justify-center text-neutral-400 hover:text-white hover:bg-rose-600 transition-colors shrink-0"
+                    className="w-8 h-8 rounded-full bg-[#181822] border border-[#2a2a38] flex items-center justify-center text-neutral-400 hover:text-white hover:bg-rose-600 transition-colors shrink-0 ml-2"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                {/* Modal Viewport Switcher Tabs (Only if Video or multiple views exist) */}
-                {isVideoType && embedUrl && (
-                  <div className="flex items-center gap-2 px-5 py-2 bg-[#12121c] border-b border-[#1e1e2c] text-xs overflow-x-auto">
-                    <button
-                      onClick={() => setPreviewTab("video")}
-                      className={`px-3 py-1.5 rounded-md font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                        previewTab === "video"
-                          ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
-                          : "text-neutral-400 hover:text-white bg-[#181824]"
-                      }`}
-                    >
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>Watch Video</span>
-                    </button>
-
-                    {assetImage && (
-                      <button
-                        onClick={() => setPreviewTab("image")}
-                        className={`px-3 py-1.5 rounded-md font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-                          previewTab === "image"
-                            ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
-                            : "text-neutral-400 hover:text-white bg-[#181824]"
-                        }`}
-                      >
-                        📷 Preview Poster
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => setPreviewTab("details")}
-                      className={`px-3 py-1.5 rounded-md font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-                        previewTab === "details"
-                          ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
-                          : "text-neutral-400 hover:text-white bg-[#181824]"
-                      }`}
-                    >
-                      📋 Overview &amp; Tech
-                    </button>
-                  </div>
-                )}
-
                 {/* Media Showcase Viewport */}
-                <div className="relative flex-1 w-full bg-[#060608] overflow-hidden flex items-center justify-center min-h-[260px] sm:min-h-[360px] max-h-[520px]">
-                  {isVideoType && previewTab === "video" && embedUrl ? (
-                    /* Google Drive Responsive Iframe Player (Loaded ONLY when clicked) */
-                    <div className="w-full h-full aspect-video max-h-[500px] flex items-center justify-center relative bg-black">
-                      <iframe
-                        src={embedUrl}
-                        title={selectedProject.title}
-                        allow="autoplay; encrypted-media; picture-in-picture"
-                        allowFullScreen
-                        className="w-full h-full border-0"
-                      />
-                    </div>
-                  ) : assetImage && (previewTab === "image" || !isVideoType) ? (
+                <div className="relative flex-1 w-full bg-[#060608] overflow-y-auto overflow-x-hidden flex items-center justify-center min-h-0">
+                  {isVideoType && embedUrl ? (
+                    /* Minimalist Custom Video Player with Only Play/Pause & Download Protection */
+                    <CustomVideoPlayer
+                      url={embedUrl}
+                      poster={assetImage}
+                      title={selectedProject.title}
+                    />
+                  ) : assetImage ? (
                     /* Website / Logo / Graphics Image Asset Display with Admin Fit/Position Settings */
-                    <div className="relative w-full h-full min-h-[300px]">
+                    <div className="relative w-full aspect-[16/9] sm:aspect-[16/10] max-h-[58vh] min-h-[220px] sm:min-h-[320px] flex items-center justify-center p-2">
                       <Image
                         src={assetImage}
                         alt={selectedProject.title}
@@ -426,66 +404,68 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
                           objectFit: objectFit as any,
                           objectPosition: objectPosition,
                         }}
-                        className="p-2"
+                        className="p-1 sm:p-2 object-contain"
                       />
                     </div>
                   ) : (
                     /* Project Details / Overview View */
-                    <div className="w-full h-full min-h-[300px] flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#181826] via-[#101018] to-[#08080d] text-center">
-                      <Sparkles className="w-10 h-10 text-rose-500 mb-3 animate-pulse" />
-                      <h3 className="font-condensed text-2xl font-extrabold text-white uppercase tracking-wider mb-2">
+                    <div className="w-full h-full min-h-[220px] flex flex-col items-center justify-center p-5 sm:p-8 bg-gradient-to-br from-[#181826] via-[#101018] to-[#08080d] text-center">
+                      <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-rose-500 mb-2 sm:mb-3 animate-pulse" />
+                      <h3 className="font-condensed text-xl sm:text-2xl font-extrabold text-white uppercase tracking-wider mb-1.5 sm:mb-2">
                         {selectedProject.title}
                       </h3>
-                      <p className="text-rose-400 text-xs font-bold uppercase tracking-widest mb-3">
+                      <p className="text-rose-400 text-xs font-bold uppercase tracking-widest mb-2 sm:mb-3">
                         {selectedProject.category}
                       </p>
-                      <p className="text-neutral-300 text-xs max-w-lg leading-relaxed font-light">
+                      <p className="text-neutral-300 text-xs sm:text-sm max-w-lg leading-relaxed font-light">
                         {selectedProject.description}
                       </p>
                     </div>
                   )}
                 </div>
 
-                {/* Modal Footer & Actions */}
-                <div className="p-4 sm:p-5 bg-[#0e0e14] border-t border-[#1c1c28] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {selectedProject.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="text-[9px] font-semibold text-neutral-300 bg-[#161622] border border-[#262638] px-2 py-0.5 rounded uppercase tracking-wider"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
+                {/* Modal Footer & Actions (Only shown for non-video projects like Websites & Graphics) */}
+                {!isVideoType && (
+                  <div className="p-3.5 sm:p-5 bg-[#0e0e14] border-t border-[#1c1c28] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
+                      {selectedProject.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-[9px] font-semibold text-neutral-300 bg-[#161622] border border-[#262638] px-2 py-0.5 rounded uppercase tracking-wider"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    {onOpenContactService && (
-                      <button
-                        onClick={() => {
-                          onOpenContactService(selectedProject.category || selectedProject.title);
-                          setSelectedProject(null);
-                        }}
-                        className="flex items-center gap-2 px-3.5 py-2 text-xs uppercase font-bold text-neutral-300 bg-[#1a1a26] hover:bg-neutral-800 border border-[#28283a] rounded transition-all"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Inquire Service</span>
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 w-full sm:w-auto justify-end">
+                      {onOpenContactService && (
+                        <button
+                          onClick={() => {
+                            onOpenContactService(selectedProject.category || selectedProject.title);
+                            setSelectedProject(null);
+                          }}
+                          className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-3.5 py-2 text-xs uppercase font-bold text-neutral-300 bg-[#1a1a26] hover:bg-neutral-800 border border-[#28283a] rounded transition-all"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Inquire Service</span>
+                        </button>
+                      )}
 
-                    {selectedProject.link && selectedProject.link !== "#" && (
-                      <a
-                        href={selectedProject.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 px-4 py-2 text-xs uppercase font-bold text-white bg-rose-600 hover:bg-rose-700 rounded shadow-lg shadow-rose-950/50 transition-all active:scale-95"
-                      >
-                        <span>{isWebsiteType ? "Visit Live Site" : "Open Link"}</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    )}
+                      {selectedProject.link && selectedProject.link !== "#" && (
+                        <a
+                          href={selectedProject.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 text-xs uppercase font-bold text-white bg-rose-600 hover:bg-rose-700 rounded shadow-lg shadow-rose-950/50 transition-all active:scale-95"
+                        >
+                          <span>{isWebsiteType ? "Visit Live Site" : "Open Link"}</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </motion.div>
             </div>
           );
