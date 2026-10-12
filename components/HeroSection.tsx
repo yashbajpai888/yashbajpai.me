@@ -6,11 +6,14 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getResumeConfig, ResumeConfig } from "@/lib/resume";
 
+import { SectionVisibility } from "@/lib/visibility";
+
 interface HeroSectionProps {
   onOpenContact: () => void;
+  visibility?: SectionVisibility;
 }
 
-export default function HeroSection({ onOpenContact }: HeroSectionProps) {
+export default function HeroSection({ onOpenContact, visibility }: HeroSectionProps) {
   const [greeting, setGreeting] = useState("Hello, I'm");
   const [name, setName] = useState("YASH BAJPAI");
   const [subtitle, setSubtitle] = useState("GTM ENGINEER SOFTWARE DEVELOPER & DIGITAL MARKETING");
@@ -27,6 +30,10 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
     storagePath: "public/Yash_S_Bajpai_Resume.pdf",
     updatedAt: new Date()
   });
+
+  const showStats = visibility?.heroStats !== false;
+  const showResume = visibility?.heroResume !== false;
+  const showBadge = visibility?.heroBadge !== false;
 
   const heroRef = useRef<HTMLElement>(null);
   const mouseRef = useRef({
@@ -191,7 +198,7 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
           initial={{ opacity: 0, x: -30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8 }}
-          className="lg:col-span-5 flex flex-col justify-end pt-12 lg:pt-24 z-20"
+          className={`${showStats ? "lg:col-span-5" : "lg:col-span-6"} flex flex-col justify-end pt-12 lg:pt-24 z-20`}
         >
           <div
             className="flex flex-col justify-end"
@@ -226,9 +233,9 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
             </p>
           </div>
 
-          {/* CTA Row: My Resume & Get In Touch (Kept stable for optimal interaction) */}
+          {/* CTA Row: My Resume & Get In Touch */}
           <div className="flex items-center space-x-3">
-            {resumeConfig?.url && (
+            {showResume && resumeConfig?.url && (
               <a
                 href={resumeConfig.url}
                 target="_blank"
@@ -254,7 +261,7 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, delay: 0.2 }}
-          className="lg:col-span-5 relative flex justify-center items-end z-20"
+          className={`${showStats ? "lg:col-span-5" : "lg:col-span-6"} relative flex justify-center items-end z-20`}
         >
           {/* Portrait Container (Depth Layer 3) */}
           <div className="relative w-full max-w-[460px] flex justify-center items-end group">
@@ -279,84 +286,88 @@ export default function HeroSection({ onOpenContact }: HeroSectionProps) {
           </div>
 
           {/* Floating Circular Badge (Depth Layer 4) */}
-          <div className="absolute top-[45%] right-0 sm:-right-8 -translate-y-1/2 z-30">
-            <div
-              className="relative w-24 h-24 sm:w-36 sm:h-36 rounded-full bg-[#0d0d12]/95 border border-rose-600/30 flex items-center justify-center p-2 shadow-2xl"
-              style={{
-                transform: "translate3d(var(--hero-badge-x, 0px), var(--hero-badge-y, 0px), 0)",
-                willChange: "transform",
-              }}
-            >
-              {/* Rotating Circular Text Ring */}
-              <div className="absolute inset-0 animate-spin-slow will-change-transform">
-                <svg className="w-full h-full" viewBox="0 0 100 100">
-                  <path
-                    id="textPath"
-                    d="M 50, 50 m -37, 0 a 37,37 0 1,1 74,0 a 37,37 0 1,1 -74,0"
-                    fill="none"
-                  />
-                  <text className="text-[8.5px] font-semibold tracking-[0.18em] uppercase fill-neutral-300">
-                    <textPath href="#textPath" startOffset="0%">
-                      {badgeText}
-                    </textPath>
-                  </text>
-                </svg>
-              </div>
+          {showBadge && (
+            <div className="absolute top-[45%] right-0 sm:-right-8 -translate-y-1/2 z-30">
+              <div
+                className="relative w-24 h-24 sm:w-36 sm:h-36 rounded-full bg-[#0d0d12]/95 border border-rose-600/30 flex items-center justify-center p-2 shadow-2xl"
+                style={{
+                  transform: "translate3d(var(--hero-badge-x, 0px), var(--hero-badge-y, 0px), 0)",
+                  willChange: "transform",
+                }}
+              >
+                {/* Rotating Circular Text Ring */}
+                <div className="absolute inset-0 animate-spin-slow will-change-transform">
+                  <svg className="w-full h-full" viewBox="0 0 100 100">
+                    <path
+                      id="textPath"
+                      d="M 50, 50 m -37, 0 a 37,37 0 1,1 74,0 a 37,37 0 1,1 -74,0"
+                      fill="none"
+                    />
+                    <text className="text-[8.5px] font-semibold tracking-[0.18em] uppercase fill-neutral-300">
+                      <textPath href="#textPath" startOffset="0%">
+                        {badgeText}
+                      </textPath>
+                    </text>
+                  </svg>
+                </div>
 
-              {/* Center Icon */}
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-rose-600/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 fill-rose-500" />
+                {/* Center Icon */}
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-rose-600/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 fill-rose-500" />
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </motion.div>
 
         {/* Far-Right Column: Key Metrics / Stats Stack (Depth Layer 5) */}
-        <motion.div
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8, delay: 0.4 }}
-          className="lg:col-span-2 flex flex-row lg:flex-col justify-around lg:justify-end items-center lg:items-start border-t lg:border-t-0 lg:border-l border-[#1a1a24] pt-6 lg:pt-0 pb-2 lg:pb-4 pl-0 lg:pl-8 space-y-0 lg:space-y-6"
-        >
-          <div
-            className="flex flex-row lg:flex-col justify-around lg:justify-end items-center lg:items-start w-full space-y-0 lg:space-y-6"
-            style={{
-              transform: "translate3d(var(--hero-stats-x, 0px), var(--hero-stats-y, 0px), 0)",
-              willChange: "transform",
-            }}
+        {showStats && (
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="lg:col-span-2 flex flex-row lg:flex-col justify-around lg:justify-end items-center lg:items-start border-t lg:border-t-0 lg:border-l border-[#1a1a24] pt-6 lg:pt-0 pb-2 lg:pb-4 pl-0 lg:pl-8 space-y-0 lg:space-y-6"
           >
-            <div className="group text-center lg:text-left">
-              <div className="font-condensed text-3xl sm:text-5xl font-extrabold text-rose-500 group-hover:translate-x-1 transition-transform">
-                {exp}
+            <div
+              className="flex flex-row lg:flex-col justify-around lg:justify-end items-center lg:items-start w-full space-y-0 lg:space-y-6"
+              style={{
+                transform: "translate3d(var(--hero-stats-x, 0px), var(--hero-stats-y, 0px), 0)",
+                willChange: "transform",
+              }}
+            >
+              <div className="group text-center lg:text-left">
+                <div className="font-condensed text-3xl sm:text-5xl font-extrabold text-rose-500 group-hover:translate-x-1 transition-transform">
+                  {exp}
+                </div>
+                <div className="text-[9px] sm:text-xs text-neutral-400 font-semibold uppercase tracking-wider mt-1">
+                  YEARS<br />EXPERIENCE
+                </div>
               </div>
-              <div className="text-[9px] sm:text-xs text-neutral-400 font-semibold uppercase tracking-wider mt-1">
-                YEARS<br />EXPERIENCE
+
+              <div className="hidden lg:block w-8 h-[1px] bg-[#1a1a24]" />
+
+              <div className="group text-center lg:text-left">
+                <div className="font-condensed text-3xl sm:text-5xl font-extrabold text-rose-500 group-hover:translate-x-1 transition-transform">
+                  {proj}
+                </div>
+                <div className="text-[9px] sm:text-xs text-neutral-400 font-semibold uppercase tracking-wider mt-1">
+                  PROJECTS<br />COMPLETED
+                </div>
+              </div>
+
+              <div className="hidden lg:block w-8 h-[1px] bg-[#1a1a24]" />
+
+              <div className="group text-center lg:text-left">
+                <div className="font-condensed text-3xl sm:text-5xl font-extrabold text-rose-500 group-hover:translate-x-1 transition-transform">
+                  {clients}
+                </div>
+                <div className="text-[9px] sm:text-xs text-neutral-400 font-semibold uppercase tracking-wider mt-1">
+                  HAPPY<br />CLIENTS
+                </div>
               </div>
             </div>
-
-            <div className="hidden lg:block w-8 h-[1px] bg-[#1a1a24]" />
-
-            <div className="group text-center lg:text-left">
-              <div className="font-condensed text-3xl sm:text-5xl font-extrabold text-rose-500 group-hover:translate-x-1 transition-transform">
-                {proj}
-              </div>
-              <div className="text-[9px] sm:text-xs text-neutral-400 font-semibold uppercase tracking-wider mt-1">
-                PROJECTS<br />COMPLETED
-              </div>
-            </div>
-
-            <div className="hidden lg:block w-8 h-[1px] bg-[#1a1a24]" />
-
-            <div className="group text-center lg:text-left">
-              <div className="font-condensed text-3xl sm:text-5xl font-extrabold text-rose-500 group-hover:translate-x-1 transition-transform">
-                {clients}
-              </div>
-              <div className="text-[9px] sm:text-xs text-neutral-400 font-semibold uppercase tracking-wider mt-1">
-                HAPPY<br />CLIENTS
-              </div>
-            </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
       </div>
     </section>
   );

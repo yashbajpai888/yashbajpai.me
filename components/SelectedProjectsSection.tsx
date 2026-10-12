@@ -35,6 +35,7 @@ export interface Project {
   num: string;
   title: string;
   category: string;
+  hidden?: boolean;
   image: string;
   imagePath?: string;
   previewImageUrl?: string;
@@ -73,11 +74,13 @@ export default function SelectedProjectsSection({ onOpenContactService }: Select
         const fetched: Project[] = [];
         snap.forEach((docSnap) => {
           const d = docSnap.data();
+          if (d.hidden === true) return; // Do not display hidden projects on front-end
           fetched.push({
             id: docSnap.id,
             num: d.num || "01",
             title: d.title || "",
             category: d.category || "",
+            hidden: false,
             image: d.image || d.previewImageUrl || d.videoPreviewUrl || "",
             imagePath: d.imagePath || "",
             previewImageUrl: d.previewImageUrl || d.image || d.videoPreviewUrl || "",

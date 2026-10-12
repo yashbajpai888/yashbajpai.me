@@ -17,9 +17,17 @@ import {
   Plus,
   Trash2,
   Upload,
-  FileText
+  FileText,
+  Eye,
+  EyeOff,
+  Layers,
+  CheckCircle2,
+  Sliders,
+  FolderGit,
+  RefreshCw
 } from "lucide-react";
 import ResumeManagementSection from "@/components/admin/ResumeManagementSection";
+import { SectionVisibility, DEFAULT_VISIBILITY } from "@/lib/visibility";
 
 interface EducationItem {
   id: string;
@@ -78,8 +86,11 @@ export default function AdminSettingsPage() {
   
   // Tab control
   const [activeTab, setActiveTab] = useState<
-    "cms-hero" | "cms-resume" | "cms-education-skills" | "cms-process-quote" | "cms-contact" | "env"
-  >("cms-hero");
+    "cms-visibility" | "cms-hero" | "cms-resume" | "cms-education-skills" | "cms-process-quote" | "cms-contact" | "env"
+  >("cms-visibility");
+
+  // Visibility state
+  const [visibility, setVisibility] = useState<Required<SectionVisibility>>(DEFAULT_VISIBILITY);
 
   // CMS State - Hero & Stats
   const [heroGreeting, setHeroGreeting] = useState("Hello, I'm");
@@ -127,6 +138,14 @@ export default function AdminSettingsPage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         
+        // Visibility
+        if (data.visibility) {
+          setVisibility({
+            ...DEFAULT_VISIBILITY,
+            ...data.visibility
+          });
+        }
+
         // Hero
         if (data.hero) {
           setHeroGreeting(data.hero.greeting || "Hello, I'm");
@@ -257,12 +276,57 @@ export default function AdminSettingsPage() {
     );
   };
 
+  // Visibility Helpers
+  const toggleSectionVisibility = async (key: keyof SectionVisibility) => {
+    const nextVal = !(visibility[key] !== false);
+    const updated = {
+      ...visibility,
+      [key]: nextVal
+    };
+    setVisibility(updated);
+    try {
+      await setDoc(doc(db, "settings", "homepage"), {
+        visibility: updated,
+        updatedAt: Timestamp.now()
+      }, { merge: true });
+    } catch (e) {
+      console.warn("Could not save visibility toggle to Firestore:", e);
+    }
+  };
+
+  const handleSetAllVisibility = async (val: boolean) => {
+    const updated: Required<SectionVisibility> = {
+      navbar: val,
+      hero: val,
+      heroStats: val,
+      heroResume: val,
+      heroBadge: val,
+      services: val,
+      projects: val,
+      educationSkills: val,
+      workProcess: val,
+      aboutQuote: val,
+      contactFooter: val,
+    };
+    setVisibility(updated);
+    try {
+      await setDoc(doc(db, "settings", "homepage"), {
+        visibility: updated,
+        updatedAt: Timestamp.now()
+      }, { merge: true });
+      alert(val ? "All sections are now set to VISIBLE on the website!" : "All optional sections are now set to HIDDEN from visitors!");
+    } catch (e) {
+      console.warn("Could not save bulk visibility to Firestore:", e);
+    }
+  };
+
   // Save All CMS Content
   const handleSaveCMS = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
       const payload = {
+        visibility,
         hero: {
           greeting: heroGreeting,
           name: heroName,
@@ -296,7 +360,7 @@ export default function AdminSettingsPage() {
       };
 
       await setDoc(doc(db, "settings", "homepage"), payload);
-      alert("All Homepage CMS content saved successfully! Your front page is now updated live.");
+      alert("All Homepage CMS content & section visibility saved successfully! Your front page is now updated live.");
     } catch (err: any) {
       console.error("Error saving CMS data:", err);
       alert(`Database save failed: ${err.message}`);
@@ -305,7 +369,76 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const visibilitySections: {
+    key: keyof SectionVisibility;
+    title: string;
+    desc: string;
+    icon: any;
+  }[] = [
+    {
+      key: "navbar",
+      title: "Navbar Top Header",
+      desc: "Top navigation header with digital creator branding and freelance status badge.",
+      icon: Layout,
+    },
+    {
+      key: "hero",
+      title: "Hero Showcase Section",
+      desc: "Primary hero section with name, cursive greeting, bio, portrait photo & backdrop.",
+      icon: Layout,
+    },
+    {
+      key: "heroStats",
+      title: "Hero Metric Stats",
+      desc: "3 quantitative statistics (Years Experience, Projects Completed, Happy Clients).",
+      icon: CheckCircle2,
+    },
+    {
+      key: "heroResume",
+      title: "Hero Resume CTA Button",
+      desc: "Direct resume download CTA button in the hero banner.",
+      icon: FileText,
+    },
+    {
+      key: "services",
+      title: "Core Services & Expertise",
+      desc: "Services showcase (Logo Design, AI Video Ads, Product Demos, Website Dev).",
+      icon: Sparkles,
+    },
+    {
+      key: "projects",
+      title: "Selected Projects Showcase",
+      desc: "Interactive category filter & media showcase grid of all portfolio projects.",
+      icon: FolderGit,
+    },
+    {
+      key: "educationSkills",
+      title: "Education & Skills Subsection",
+      desc: "Academic degrees history & interactive skill pill tag cloud.",
+      icon: GraduationCap,
+    },
+    {
+      key: "workProcess",
+      title: "5-Step Work Process Subsection",
+      desc: "Discover, Ideate, Design, Develop, and Deliver step-by-step workflow timeline.",
+      icon: ListOrdered,
+    },
+    {
+      key: "aboutQuote",
+      title: "Crimson Signature Quote Card",
+      desc: "Red quotation card with signature, quote text, and bottom collaboration callout.",
+      icon: Sparkles,
+    },
+    {
+      key: "contactFooter",
+      title: "Contact & Footer Section",
+      desc: "Let's Work Together prompt, contact details cards, and inquiry modal buttons.",
+      icon: Mail,
+    },
+  ];
+
   const tabs = [
+    { id: "cms-visibility", label: "Section Visibility", icon: Eye },
     { id: "cms-hero", label: "Hero & Media", icon: Layout },
     { id: "cms-resume", label: "Resume Settings", icon: FileText },
     { id: "cms-education-skills", label: "Education & Skills", icon: GraduationCap },
@@ -324,7 +457,7 @@ export default function AdminSettingsPage() {
             <SettingsIcon className="w-5 h-5 text-rose-500" />
           </h1>
           <p className="text-xs text-neutral-400 uppercase tracking-wider mt-1">
-            Edit and control 100% of your website content, images, timeline, skills, and metrics live
+            Edit and control 100% of your website content, section display/visibility, images, and metrics live
           </p>
         </div>
       </div>
@@ -362,6 +495,114 @@ export default function AdminSettingsPage() {
           <div className="flex-1 w-full bg-[#0b0b0e] border border-[#1a1a24] rounded-lg p-6 sm:p-8 shadow-2xl relative">
             <form onSubmit={handleSaveCMS} className="space-y-6">
               
+              {/* Tab Section Visibility */}
+              {activeTab === "cms-visibility" && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#14141c] pb-4 gap-4">
+                    <div>
+                      <h2 className="text-xs uppercase font-bold tracking-wider text-rose-500 flex items-center gap-2">
+                        <Eye className="w-4 h-4" />
+                        <span>Front-End Section Visibility &amp; Display</span>
+                      </h2>
+                      <p className="text-[11px] text-neutral-400 mt-1">
+                        Turn individual website sections on or off in real-time without writing code or deleting content.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleSetAllVisibility(true)}
+                        className="text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded bg-[#161620] border border-[#262638] text-neutral-300 hover:text-white hover:border-emerald-500 transition-colors flex items-center gap-1.5"
+                      >
+                        <Eye className="w-3 h-3 text-emerald-400" />
+                        <span>Show All</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetAllVisibility(false)}
+                        className="text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded bg-[#161620] border border-[#262638] text-neutral-300 hover:text-white hover:border-amber-500 transition-colors flex items-center gap-1.5"
+                      >
+                        <EyeOff className="w-3 h-3 text-amber-400" />
+                        <span>Hide All</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Section Toggles Grid */}
+                  <div className="space-y-3">
+                    {visibilitySections.map((sec) => {
+                      const isVisible = visibility[sec.key] !== false;
+                      const Icon = sec.icon;
+
+                      return (
+                        <div
+                          key={sec.key}
+                          className={`p-4 rounded-lg border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                            isVisible
+                              ? "bg-[#111116] border-[#22222d] hover:border-neutral-700"
+                              : "bg-[#0e0e12]/60 border-amber-500/20 opacity-80 hover:opacity-100 hover:border-amber-500/40"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3.5">
+                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${
+                              isVisible
+                                ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                                : "bg-neutral-800/40 text-neutral-500 border-neutral-700/50"
+                            }`}>
+                              <Icon className="w-4 h-4" />
+                            </div>
+
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                                  {sec.title}
+                                </h3>
+                                <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${
+                                  isVisible
+                                    ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                                    : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                                }`}>
+                                  {isVisible ? "VISIBLE ON WEBSITE" : "HIDDEN FROM VISITORS"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-neutral-400 font-light mt-0.5 max-w-lg">
+                                {sec.desc}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Switch Toggle */}
+                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => toggleSectionVisibility(sec.key)}
+                              className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 border shadow-sm ${
+                                isVisible
+                                  ? "bg-emerald-600/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/20 hover:border-emerald-500/50"
+                                  : "bg-amber-600/10 text-amber-400 border-amber-500/30 hover:bg-amber-600/20 hover:border-amber-500/50"
+                              }`}
+                            >
+                              {isVisible ? (
+                                <>
+                                  <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span>Shown</span>
+                                </>
+                              ) : (
+                                <>
+                                  <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                                  <span>Hidden</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Tab Resume Management */}
               {activeTab === "cms-resume" && (
                 <ResumeManagementSection />
@@ -370,6 +611,29 @@ export default function AdminSettingsPage() {
               {/* Tab 1: Hero & Media */}
               {activeTab === "cms-hero" && (
                 <div className="space-y-5">
+                  <div className="p-3.5 bg-[#14141c] border border-[#242432] rounded-lg flex items-center justify-between mb-4">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                        {visibility.hero !== false ? <Eye className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-amber-400" />}
+                        <span>Hero Section Visibility</span>
+                      </span>
+                      <p className="text-[10px] text-neutral-400 mt-0.5">
+                        {visibility.hero !== false ? "Hero section is currently visible on the live website." : "Hero section is currently hidden from visitors."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSectionVisibility("hero")}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
+                        visibility.hero !== false
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                      }`}
+                    >
+                      {visibility.hero !== false ? "Visible" : "Hidden"}
+                    </button>
+                  </div>
+
                   <h2 className="text-xs uppercase font-bold tracking-wider text-rose-500 mb-4 border-b border-[#14141c] pb-2">
                     Hero Section Copywriting &amp; Media
                   </h2>
@@ -546,6 +810,29 @@ export default function AdminSettingsPage() {
               {/* Tab 2: Education & Skills */}
               {activeTab === "cms-education-skills" && (
                 <div className="space-y-6">
+                  <div className="p-3.5 bg-[#14141c] border border-[#242432] rounded-lg flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                        {visibility.educationSkills !== false ? <Eye className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-amber-400" />}
+                        <span>Education &amp; Skills Subsection Visibility</span>
+                      </span>
+                      <p className="text-[10px] text-neutral-400 mt-0.5">
+                        {visibility.educationSkills !== false ? "Education timeline and skills pills are visible on the website." : "Education & skills are hidden from visitors."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSectionVisibility("educationSkills")}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
+                        visibility.educationSkills !== false
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                      }`}
+                    >
+                      {visibility.educationSkills !== false ? "Visible" : "Hidden"}
+                    </button>
+                  </div>
+
                   {/* Education Timeline Management */}
                   <div>
                     <div className="flex items-center justify-between border-b border-[#14141c] pb-2 mb-4">
@@ -666,6 +953,49 @@ export default function AdminSettingsPage() {
               {/* Tab 3: Process & Quote */}
               {activeTab === "cms-process-quote" && (
                 <div className="space-y-6">
+                  {/* Process Visibility Banner */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3 bg-[#14141c] border border-[#242432] rounded-lg flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                          {visibility.workProcess !== false ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5 text-amber-400" />}
+                          <span>Process Timeline</span>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleSectionVisibility("workProcess")}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                          visibility.workProcess !== false
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                            : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        }`}
+                      >
+                        {visibility.workProcess !== false ? "Visible" : "Hidden"}
+                      </button>
+                    </div>
+
+                    <div className="p-3 bg-[#14141c] border border-[#242432] rounded-lg flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                          {visibility.aboutQuote !== false ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5 text-amber-400" />}
+                          <span>Quote Card</span>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleSectionVisibility("aboutQuote")}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                          visibility.aboutQuote !== false
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                            : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        }`}
+                      >
+                        {visibility.aboutQuote !== false ? "Visible" : "Hidden"}
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Work Process steps editor */}
                   <div>
                     <h2 className="text-xs uppercase font-bold tracking-wider text-rose-500 border-b border-[#14141c] pb-2 mb-4 flex items-center gap-1.5">
@@ -756,6 +1086,29 @@ export default function AdminSettingsPage() {
               {/* Tab 4: Contact & Footer */}
               {activeTab === "cms-contact" && (
                 <div className="space-y-4">
+                  <div className="p-3.5 bg-[#14141c] border border-[#242432] rounded-lg flex items-center justify-between mb-4">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                        {visibility.contactFooter !== false ? <Eye className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-amber-400" />}
+                        <span>Footer &amp; Contact Section Visibility</span>
+                      </span>
+                      <p className="text-[10px] text-neutral-400 mt-0.5">
+                        {visibility.contactFooter !== false ? "Footer and contact section are visible on the website." : "Footer and contact section are hidden from visitors."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSectionVisibility("contactFooter")}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
+                        visibility.contactFooter !== false
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                      }`}
+                    >
+                      {visibility.contactFooter !== false ? "Visible" : "Hidden"}
+                    </button>
+                  </div>
+
                   <h2 className="text-xs uppercase font-bold tracking-wider text-rose-500 mb-4 border-b border-[#14141c] pb-2">
                     Contact Information &amp; Footer Section
                   </h2>

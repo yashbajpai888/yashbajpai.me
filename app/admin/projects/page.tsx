@@ -42,7 +42,9 @@ import {
   Play,
   Film as FilmIcon,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 export interface Project {
@@ -50,6 +52,7 @@ export interface Project {
   num: string;
   title: string;
   category: string;
+  hidden?: boolean;
   image: string;
   imagePath?: string;
   previewImageUrl?: string;
@@ -92,6 +95,7 @@ export default function AdminProjectsPage() {
   const [formNum, setFormNum] = useState("");
   const [formTitle, setFormTitle] = useState("");
   const [formCategory, setFormCategory] = useState("WEBSITE");
+  const [formHidden, setFormHidden] = useState(false);
   const [formDescription, setFormDescription] = useState("");
   const [formTags, setFormTags] = useState("");
   const [formLink, setFormLink] = useState("");
@@ -209,6 +213,7 @@ export default function AdminProjectsPage() {
           num: d.num || "01",
           title: d.title || "",
           category: d.category || "",
+          hidden: d.hidden === true,
           image: d.image || d.previewImageUrl || d.videoPreviewUrl || "",
           imagePath: d.imagePath || "",
           previewImageUrl: d.previewImageUrl || d.image || d.videoPreviewUrl || "",
@@ -240,12 +245,31 @@ export default function AdminProjectsPage() {
     fetchProjects();
   }, []);
 
+  const handleToggleVisibility = async (project: Project, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const nextHidden = !(project.hidden === true);
+    try {
+      const docRef = doc(db, "projects", project.id);
+      await updateDoc(docRef, {
+        hidden: nextHidden,
+        updatedAt: Timestamp.now(),
+      });
+      setProjects((prev) =>
+        prev.map((p) => (p.id === project.id ? { ...p, hidden: nextHidden } : p))
+      );
+    } catch (err: any) {
+      console.error("Failed to toggle project visibility:", err);
+      alert(`Failed to update project visibility: ${err.message || err}`);
+    }
+  };
+
   const openAddModal = (presetCategory?: string) => {
     setEditingProject(null);
     setMediaError(null);
     setFormNum(String(projects.length + 1).padStart(2, "0"));
     setFormTitle("");
-    setFormCategory(presetCategory || (adminFilter !== "ALL" ? adminFilter : "WEBSITE"));
+    setFormCategory(presetCategory || (adminFilter !== "ALL" && adminFilter !== "VISIBLE" && adminFilter !== "HIDDEN" ? adminFilter : "WEBSITE"));
+    setFormHidden(false);
     setFormPreviewImageUrl("");
     setFormPreviewImagePublicId("");
     setFormPreviewObjectFit("cover");
@@ -265,6 +289,7 @@ export default function AdminProjectsPage() {
     setFormNum(project.num);
     setFormTitle(project.title);
     setFormCategory(project.category);
+    setFormHidden(project.hidden === true);
 
     const rawImage = project.previewImageUrl || project.videoPreviewUrl || project.image || "";
     // Detect if existing document contains legacy oversized base64 data and filter it out safely
@@ -337,6 +362,7 @@ export default function AdminProjectsPage() {
       num: formNum.trim() || "01",
       title: formTitle.trim(),
       category: formCategory.trim(),
+      hidden: formHidden,
       image: cleanImageUrl,
       imagePath: formPreviewImagePublicId || "",
       previewImageUrl: cleanImageUrl,
@@ -405,11 +431,13 @@ export default function AdminProjectsPage() {
     }
   };
 
-  const matchCategory = (catStr: string, filterKey: string) => {
-    const cat = (catStr || "").toUpperCase().trim();
+  const matchCategory = (project: Project, filterKey: string) => {
+    const cat = (project.category || "").toUpperCase().trim();
     const key = filterKey.toUpperCase().trim();
 
     if (key === "ALL") return true;
+    if (key === "VISIBLE") return !project.hidden;
+    if (key === "HIDDEN") return project.hidden === true;
 
     const isLogo = cat.includes("LOGO") || cat.includes("BRAND") || cat.includes("IDENTITY");
     const isGraphics = cat.includes("GRAPHIC") || cat.includes("CREATIVE") || cat.includes("POSTER") || cat.includes("BANNER");
@@ -428,8 +456,8 @@ export default function AdminProjectsPage() {
     return cat.includes(key);
   };
 
-  const filteredProjects = projects.filter((p) => matchCategory(p.category, adminFilter));
-  const getSectionCount = (filterKey: string) => projects.filter((p) => matchCategory(p.category, filterKey)).length;
+  const filteredProjects = projects.filter((p) => matchCategory(p, adminFilter));
+  const getSectionCount = (filterKey: string) => projects.filter((p) => matchCategory(p, filterKey)).length;
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto w-full flex-1 flex flex-col space-y-8">
@@ -441,7 +469,7 @@ export default function AdminProjectsPage() {
             <FolderGit className="w-5 h-5 text-rose-500" />
           </h1>
           <p className="text-xs text-neutral-400 uppercase tracking-wider mt-1">
-            Service-Specific Media Workflows &amp; 16:9 Image Fit/Position Management
+            Manage projects, 16:9 media, and live website visibility toggles
           </p>
         </div>
         <button
@@ -510,21 +538,33 @@ export default function AdminProjectsPage() {
       <div className="flex items-center justify-between border-b border-[#1a1a24] pb-3 gap-2 overflow-x-auto">
         <div className="flex items-center gap-2">
           <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 mr-2 shrink-0">
-            SHOW SECTION:
+            SHOW:
           </span>
-          {["ALL", "WEBSITE", "LOGO DESIGN", "GRAPHICS", "AI VIDEO AD", "PRODUCT DEMO"].map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setAdminFilter(filter)}
-              className={`text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded transition-all whitespace-nowrap border ${
-                adminFilter === filter
-                  ? "bg-rose-600 text-white border-rose-500 shadow-md shadow-rose-950/40"
-                  : "bg-[#0b0b0e] text-neutral-400 border-[#1a1a24] hover:text-white hover:border-neutral-700"
-              }`}
-            >
-              {filter === "ALL" ? "ALL SECTIONS" : filter} ({getSectionCount(filter)})
-            </button>
-          ))}
+          {["ALL", "VISIBLE", "HIDDEN", "WEBSITE", "LOGO DESIGN", "GRAPHICS", "AI VIDEO AD", "PRODUCT DEMO"].map((filter) => {
+            const isHiddenFilter = filter === "HIDDEN";
+            const isVisibleFilter = filter === "VISIBLE";
+            const count = getSectionCount(filter);
+            return (
+              <button
+                key={filter}
+                onClick={() => setAdminFilter(filter)}
+                className={`text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded transition-all whitespace-nowrap border flex items-center gap-1.5 ${
+                  adminFilter === filter
+                    ? isHiddenFilter
+                      ? "bg-amber-600 text-white border-amber-500 shadow-md shadow-amber-950/40"
+                      : isVisibleFilter
+                      ? "bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-950/40"
+                      : "bg-rose-600 text-white border-rose-500 shadow-md shadow-rose-950/40"
+                    : "bg-[#0b0b0e] text-neutral-400 border-[#1a1a24] hover:text-white hover:border-neutral-700"
+                }`}
+              >
+                {isHiddenFilter && <EyeOff className="w-3 h-3 text-amber-300" />}
+                {isVisibleFilter && <Eye className="w-3 h-3 text-emerald-300" />}
+                <span>{filter === "ALL" ? "ALL PROJECTS" : filter === "VISIBLE" ? "VISIBLE ONLY" : filter === "HIDDEN" ? "HIDDEN ONLY" : filter}</span>
+                <span className="opacity-80">({count})</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -544,10 +584,10 @@ export default function AdminProjectsPage() {
             There are no project entries categorized under <span className="text-rose-500">{adminFilter}</span> yet.
           </p>
           <button
-            onClick={() => openAddModal(adminFilter !== "ALL" ? adminFilter : "WEBSITE")}
+            onClick={() => openAddModal(adminFilter !== "ALL" && adminFilter !== "VISIBLE" && adminFilter !== "HIDDEN" ? adminFilter : "WEBSITE")}
             className="text-xs uppercase font-bold tracking-widest px-4 py-2 border border-rose-500/30 hover:border-rose-500 rounded bg-[#0d0d12] text-rose-400 hover:text-white transition-colors"
           >
-            Upload To {adminFilter === "ALL" ? "Websites" : adminFilter}
+            Upload Project
           </button>
         </div>
       ) : (
@@ -563,7 +603,11 @@ export default function AdminProjectsPage() {
             return (
               <div
                 key={project.id}
-                className="group flex flex-col bg-[#0b0b0e] border border-[#1a1a24] rounded overflow-hidden relative shadow-md hover:border-rose-600/40 transition-colors"
+                className={`group flex flex-col bg-[#0b0b0e] border rounded overflow-hidden relative shadow-md transition-all ${
+                  project.hidden
+                    ? "border-amber-500/40 opacity-80 hover:opacity-100 hover:border-amber-500"
+                    : "border-[#1a1a24] hover:border-rose-600/40"
+                }`}
               >
                 {/* Project Card Preview Image Container (Fixed 16:9 Aspect Ratio) */}
                 <div className="relative w-full aspect-[16/9] overflow-hidden bg-[#0a0a0f] border-b border-[#14141c]">
@@ -588,6 +632,13 @@ export default function AdminProjectsPage() {
                   <div className="absolute top-3 left-3 z-10 text-[9px] font-bold font-condensed tracking-widest bg-rose-600 px-2 py-0.5 text-white rounded">
                     PROJ {project.num}
                   </div>
+
+                  {project.hidden && (
+                    <div className="absolute top-3 left-16 z-10 flex items-center gap-1 bg-amber-950/90 border border-amber-500/60 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-amber-400 shadow-md">
+                      <EyeOff className="w-3 h-3" />
+                      <span>HIDDEN FROM FRONTEND</span>
+                    </div>
+                  )}
 
                   {hasVideo && (
                     <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-black/80 border border-white/20 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-rose-400">
@@ -623,23 +674,48 @@ export default function AdminProjectsPage() {
                       ))}
                     </div>
 
-                    <div className="pt-3 border-t border-[#14141c] flex items-center justify-end gap-2">
+                    <div className="pt-3 border-t border-[#14141c] flex items-center justify-between gap-2">
+                      {/* Quick 1-Click Visibility Toggle Button */}
                       <button
-                        onClick={() => openEditModal(project)}
-                        className="p-1.5 rounded border border-[#22222d] text-neutral-400 hover:text-white hover:border-rose-500 transition-colors flex items-center gap-1 text-xs font-bold px-3 py-1"
-                        title="Edit Project"
+                        type="button"
+                        onClick={(e) => handleToggleVisibility(project, e)}
+                        className={`p-1.5 rounded border transition-colors flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 ${
+                          project.hidden
+                            ? "border-amber-500/40 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                            : "border-[#22222d] text-neutral-400 hover:text-white hover:border-neutral-500"
+                        }`}
+                        title={project.hidden ? "Currently hidden on frontend. Click to show." : "Currently visible on frontend. Click to hide."}
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        <span>Edit</span>
+                        {project.hidden ? (
+                          <>
+                            <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Hidden</span>
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Visible</span>
+                          </>
+                        )}
                       </button>
-                      <button
-                        onClick={() => handleDeleteProject(project)}
-                        className="p-1.5 rounded border border-[#22222d] text-neutral-400 hover:text-rose-500 hover:border-rose-500/50 transition-colors flex items-center gap-1 text-xs font-bold px-3 py-1"
-                        title="Delete Project"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete</span>
-                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEditModal(project)}
+                          className="p-1.5 rounded border border-[#22222d] text-neutral-400 hover:text-white hover:border-rose-500 transition-colors flex items-center gap-1 text-xs font-bold px-2.5 py-1"
+                          title="Edit Project"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProject(project)}
+                          className="p-1.5 rounded border border-[#22222d] text-neutral-400 hover:text-rose-500 hover:border-rose-500/50 transition-colors flex items-center gap-1 text-xs font-bold px-2 py-1"
+                          title="Delete Project"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -668,7 +744,7 @@ export default function AdminProjectsPage() {
                 <Sparkles className="w-4 h-4 text-rose-500 fill-rose-500" />
               </h3>
               <p className="text-neutral-400 text-xs mt-1">
-                Configure project metadata, service-specific media &amp; 16:9 aspect ratio presentation.
+                Configure project metadata, service-specific media &amp; frontend visibility status.
               </p>
             </div>
 
@@ -680,6 +756,42 @@ export default function AdminProjectsPage() {
             )}
 
             <form onSubmit={handleFormSubmit} className="space-y-5">
+              {/* VISIBILITY TOGGLE BANNER */}
+              <div className="p-3.5 bg-[#14141c] border border-[#242432] rounded-lg flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                    {formHidden ? <EyeOff className="w-4 h-4 text-amber-400" /> : <Eye className="w-4 h-4 text-emerald-400" />}
+                    <span>Website Visibility Status</span>
+                  </label>
+                  <p className="text-[10px] text-neutral-400 mt-0.5">
+                    {formHidden
+                      ? "Hidden from frontend visitors (Draft / Private Mode)."
+                      : "Live & visible to all visitors on your website."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormHidden(!formHidden)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
+                    formHidden
+                      ? "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
+                      : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30"
+                  }`}
+                >
+                  {formHidden ? (
+                    <>
+                      <EyeOff className="w-3.5 h-3.5" />
+                      <span>Hidden (Draft)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Visible (Live)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
               {/* TARGET SECTION / SERVICE DROPDOWN */}
               <div>
                 <label className="block text-[10px] uppercase font-bold tracking-wider text-rose-400 mb-1.5">
